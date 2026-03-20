@@ -1,32 +1,36 @@
+// lib/main.dart
+// App entry point. Do not put business logic here.
+
 import 'package:flutter/material.dart';
-import 'package:leftover_legends/pages/login_page.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'router.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(
+    // ProviderScope enables Riverpod throughout the entire app
+    const ProviderScope(
+      child: LeftoverLegendsApp(),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
-  
+class LeftoverLegendsApp extends StatelessWidget {
+  const LeftoverLegendsApp({super.key});
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Leftover_Legends',
+    return MaterialApp.router(
+      title: 'Leftover Legends',
+      debugShowCheckedModeBanner: false,
+      routerConfig: appRouter,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blueAccent
+          seedColor: const Color(0xFF5C9E6E), // green from the mockup
+          brightness: Brightness.dark,
         ),
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          titleTextStyle: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          backgroundColor: Colors.blueAccent,
-          foregroundColor: Colors.white,
-        ),
+        fontFamily: 'Nunito',
       ),
-      home: LoginPage()
     );
   }
 }
