@@ -1,10 +1,15 @@
+// lib/screens/fridge_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../models/item.dart';
+import '../models/recipe.dart';
 import '../providers/auth_provider.dart';
 import '../providers/item_provider.dart';
 import '../widgets/item_card.dart';
+import '../providers/recipe_provider.dart';
+import 'recipes_screen.dart';
 
 class FridgeScreen extends ConsumerWidget {
   const FridgeScreen({super.key});
@@ -57,7 +62,8 @@ class FridgeScreen extends ConsumerWidget {
                 }
 
                 return RefreshIndicator(
-                  onRefresh: () => ref.read(itemsProvider.notifier).refreshItems(),
+                  onRefresh: () =>
+                      ref.read(itemsProvider.notifier).refreshItems(),
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
                     children: [
@@ -67,6 +73,11 @@ class FridgeScreen extends ConsumerWidget {
                           '${items.length} item${items.length == 1 ? '' : 's'}',
                         ),
                       ),
+
+                      _GenerateRecipesButton(items: items),
+
+                      const SizedBox(height: 12),
+
                       ...items.map(
                         (item) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -99,5 +110,66 @@ class FridgeScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+class _GenerateRecipesButton extends ConsumerStatefulWidget {
+  final List<FridgeItem> items;
+
+  const _GenerateRecipesButton({required this.items});
+
+  @override
+  ConsumerState<_GenerateRecipesButton> createState() =>
+      _GenerateRecipesButtonState();
+}
+
+class _GenerateRecipesButtonState
+    extends ConsumerState<_GenerateRecipesButton> {
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: _loading ? null : _generate,
+      icon: _loading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.restaurant_menu),
+      label: Text(_loading ? 'Generating...' : 'Generate recipes'),
+    );
+  }
+
+  Future<void> _generate() async {
+    setState(() => _loading = true);
+    try {
+      final result = await ref.read(recipeServiceProvider).generateRecipes(
+            items: widget.items,
+            culture: 'Italian',
+          );
+
+      final recipesRaw =
+          (result['data']?['recipes'] as List<dynamic>?) ?? [];
+      final recipes =
+          recipesRaw.map((r) => Recipe.fromJson(r as Map<String, dynamic>)).toList();
+
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RecipesScreen(recipes: recipes),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Recipe error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 }
