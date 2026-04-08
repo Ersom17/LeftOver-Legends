@@ -1,13 +1,33 @@
 // lib/screens/recipes_screen.dart
 
 import 'package:flutter/material.dart';
+import '../models/item.dart';
 import '../models/recipe.dart';
 import 'recipe_detail_screen.dart';
 
 class RecipesScreen extends StatelessWidget {
   final List<Recipe> recipes;
+  final List<FridgeItem> fridgeItems;
 
-  const RecipesScreen({super.key, required this.recipes});
+  const RecipesScreen({
+    super.key,
+    required this.recipes,
+    required this.fridgeItems,
+  });
+
+  /// Returns the expiry color for an ingredient based on its daysLeft in the fridge
+  Color _chipColor(String ingredientName) {
+    final match = fridgeItems.firstWhere(
+      (item) => item.name.toLowerCase() == ingredientName.toLowerCase(),
+      orElse: () => FridgeItem(
+        id: '', name: '', emoji: '', expiryDate: DateTime.now().add(const Duration(days: 999)),
+        category: ItemCategory.other, addedAt: DateTime.now(), ownerId: '',
+      ),
+    );
+    if (match.daysLeft <= 1) return const Color(0xFFC05050);
+    if (match.daysLeft <= 4) return const Color(0xFFE8A838);
+    return const Color(0xFF6BAF7A);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +58,10 @@ class RecipesScreen extends StatelessWidget {
           return GestureDetector(
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => RecipeDetailScreen(recipe: recipe),
+                builder: (_) => RecipeDetailScreen(
+                  recipe: recipe,
+                  fridgeItems: fridgeItems,
+                ),
               ),
             ),
             child: Container(
@@ -129,12 +152,7 @@ class RecipesScreen extends StatelessWidget {
                     runSpacing: 6,
                     children: [
                       ...recipe.ingredientsUsed.map(
-                        (ing) => _chip(
-                          ing,
-                          recipe.priorityIngredientsUsed.contains(ing)
-                              ? const Color(0xFFC05050)
-                              : const Color(0xFF5C9E6E),
-                        ),
+                        (ing) => _chip(ing, _chipColor(ing)),
                       ),
                       ...recipe.missingIngredients.map(
                         (ing) => _chip(ing, const Color(0xFF3A4540),

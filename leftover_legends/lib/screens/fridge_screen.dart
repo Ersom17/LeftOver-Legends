@@ -10,6 +10,7 @@ import '../providers/item_provider.dart';
 import '../widgets/item_card.dart';
 import '../providers/recipe_provider.dart';
 import 'recipes_screen.dart';
+import 'recipe_options_sheet.dart';
 
 class FridgeScreen extends ConsumerWidget {
   const FridgeScreen({super.key});
@@ -143,22 +144,46 @@ class _GenerateRecipesButtonState
   }
 
   Future<void> _generate() async {
+    // 1. Show options sheet and wait for user input
+    final options = await showModalBottomSheet<RecipeOptions>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: const RecipeOptionsSheet(),
+      ),
+    );
+
+    // User dismissed the sheet without tapping Generate
+    if (options == null) return;
+
     setState(() => _loading = true);
     try {
+      final validItems = widget.items
+          .where((item) => item.daysLeft >= 0)
+          .toList();
+
       final result = await ref.read(recipeServiceProvider).generateRecipes(
-            items: widget.items,
-            culture: 'Italian',
+            items: validItems,
+            culture: options.culture,
           );
 
       final recipesRaw =
           (result['data']?['recipes'] as List<dynamic>?) ?? [];
-      final recipes =
-          recipesRaw.map((r) => Recipe.fromJson(r as Map<String, dynamic>)).toList();
+      final recipes = recipesRaw
+          .map((r) => Recipe.fromJson(r as Map<String, dynamic>))
+          .toList();
 
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => RecipesScreen(recipes: recipes),
+            builder: (_) => RecipesScreen(
+              recipes: recipes,
+              fridgeItems: validItems,
+            ),
           ),
         );
       }

@@ -1,12 +1,31 @@
 // lib/screens/recipe_detail_screen.dart
 
 import 'package:flutter/material.dart';
+import '../models/item.dart';
 import '../models/recipe.dart';
 
 class RecipeDetailScreen extends StatelessWidget {
   final Recipe recipe;
+  final List<FridgeItem> fridgeItems;
 
-  const RecipeDetailScreen({super.key, required this.recipe});
+  const RecipeDetailScreen({
+    super.key,
+    required this.recipe,
+    required this.fridgeItems,
+  });
+
+  Color _chipColor(String ingredientName) {
+    final match = fridgeItems.firstWhere(
+      (item) => item.name.toLowerCase() == ingredientName.toLowerCase(),
+      orElse: () => FridgeItem(
+        id: '', name: '', emoji: '', expiryDate: DateTime.now().add(const Duration(days: 999)),
+        category: ItemCategory.other, addedAt: DateTime.now(), ownerId: '',
+      ),
+    );
+    if (match.daysLeft <= 1) return const Color(0xFFC05050);
+    if (match.daysLeft <= 4) return const Color(0xFFE8A838);
+    return const Color(0xFF6BAF7A);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,15 +79,18 @@ class RecipeDetailScreen extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: recipe.ingredientsUsed.map((ing) {
-                final isUrgent =
-                    recipe.priorityIngredientsUsed.contains(ing);
-                return _ingredientChip(
-                  ing,
-                  isUrgent ? const Color(0xFFC05050) : const Color(0xFF5C9E6E),
-                  icon: isUrgent ? Icons.warning_amber_rounded : Icons.check,
-                );
-              }).toList(),
+              children: recipe.ingredientsUsed
+                  .map((ing) {
+                    final color = _chipColor(ing);
+                    return _ingredientChip(
+                      ing,
+                      color,
+                      icon: color == const Color(0xFFC05050)
+                          ? Icons.warning_amber_rounded
+                          : Icons.check,
+                    );
+                  })
+                  .toList(),
             ),
 
             if (recipe.missingIngredients.isNotEmpty) ...[

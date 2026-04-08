@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../models/item.dart';
@@ -15,77 +16,93 @@ class AddItemScreen extends ConsumerStatefulWidget {
 class _AddItemScreenState extends ConsumerState<AddItemScreen> {
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
-  final _unitController = TextEditingController();
 
   ItemCategory _selectedCategory = ItemCategory.other;
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 5));
   String _selectedEmoji = '🍽️';
+  String _selectedCurrency = 'CHF';
   bool _saving = false;
 
+  static const _currencies = [
+    'CHF', 'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CNY', 'INR', 'BRL',
+    'MXN', 'KRW', 'SGD', 'HKD', 'NOK', 'SEK', 'DKK', 'PLN', 'CZK', 'TRY',
+  ];
+
   static const _emojiOptions = [
-    '🥛', '🧀', '🥚', '🥦', '🍎', '🥕', '🍳', '🧅', '🫙', '🥩',
-    '🍞', '🧈', '🍋', '🥬', '🫐', '🥑', '🍅', '🌽', '🍽️',
+    // Dairy
+    '🥛', '🧀', '🥚', '🧈', '🍦',
+    // Vegetables
+    '🥦', '🥕', '🧅', '🥬', '🌽', '🍅', '🧄', '🥔', '🌶️', '🫑',
+    '🥒', '🫛', '🧆', '🥗',
+    // Fruit
+    '🍎', '🍋', '🫐', '🥑', '🍇', '🍓', '🍑', '🥭', '🍍', '🥝',
+    '🍊', '🍌', '🍒', '🫒', '🍈',
+    // Protein / Meat
+    '🥩', '🍗', '🥓', '🌭', '🍖', '🦐', '🐟', '🦑', '🥚',
+    // Grains / Bread
+    '🍞', '🥐', '🥨', '🧇', '🍚', '🍝', '🌮', '🥙', '🫓',
+    // Drinks
+    '🧃', '🥤', '🍷', '🍺', '☕', '🧋',
+    // Condiments / Other
+    '🫙', '🍳', '🫕', '🥫', '🧂', '🍯', '🫚', '🥜', '🍽️',
   ];
 
   @override
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
-    _unitController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-  if (_nameController.text.trim().isEmpty) return;
+    if (_nameController.text.trim().isEmpty) return;
+    if (_priceController.text.trim().isEmpty) return;
 
-  final user = ref.read(authProvider).value;
-  if (user == null) {
-    debugPrint('No logged-in user found');
-    return;
-  }
-
-  setState(() => _saving = true);
-
-  try {
     final price = double.tryParse(_priceController.text.trim());
+    if (price == null) return;
 
-    final item = FridgeItem(
-      id: '',
-      name: _nameController.text.trim(),
-      emoji: _selectedEmoji,
-      expiryDate: _expiryDate,
-      category: _selectedCategory,
-      addedAt: DateTime.now(),
-      ownerId: user.$id,
-      price: price,
-      unit: _unitController.text.trim().isEmpty
-          ? null
-          : _unitController.text.trim(),
-    );
-
-    await ref.read(itemsProvider.notifier).addItem(item);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Item added successfully')),
-      );
-      context.pop();
+    final user = ref.read(authProvider).value;
+    if (user == null) {
+      debugPrint('No logged-in user found');
+      return;
     }
-  } catch (e, st) {
-    debugPrint('ADD ITEM ERROR: $e');
-    debugPrintStack(stackTrace: st);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding item: $e')),
+    setState(() => _saving = true);
+
+    try {
+      final item = FridgeItem(
+        id: '',
+        name: _nameController.text.trim(),
+        emoji: _selectedEmoji,
+        expiryDate: _expiryDate,
+        category: _selectedCategory,
+        addedAt: DateTime.now(),
+        ownerId: user.$id,
+        price: price,
+        unit: _selectedCurrency,
       );
-    }
-  } finally {
-    if (mounted) {
-      setState(() => _saving = false);
+
+      await ref.read(itemsProvider.notifier).addItem(item);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Item added successfully')),
+        );
+        context.pop();
+      }
+    } catch (e, st) {
+      debugPrint('ADD ITEM ERROR: $e');
+      debugPrintStack(stackTrace: st);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error adding item: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
-}
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -101,9 +118,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
       ),
     );
 
-    if (picked != null) {
-      setState(() => _expiryDate = picked);
-    }
+    if (picked != null) setState(() => _expiryDate = picked);
   }
 
   @override
@@ -129,6 +144,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Item name
             _label('Item name'),
             TextField(
               controller: _nameController,
@@ -137,6 +153,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
             ),
             const SizedBox(height: 20),
 
+            // Emoji picker
             _label('Pick an emoji'),
             Wrap(
               spacing: 8,
@@ -150,7 +167,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
                     height: 44,
                     decoration: BoxDecoration(
                       color: selected
-                          ? const Color(0xFF5C9E6E22)
+                          ? const Color(0xFF5C9E6E).withOpacity(0.13)
                           : const Color(0xFF232B25),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
@@ -168,6 +185,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
             ),
             const SizedBox(height: 20),
 
+            // Category
             _label('Category'),
             DropdownButtonFormField<ItemCategory>(
               value: _selectedCategory,
@@ -186,6 +204,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
             ),
             const SizedBox(height: 20),
 
+            // Expiry date
             _label('Expiry date'),
             GestureDetector(
               onTap: _pickDate,
@@ -199,18 +218,13 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.calendar_today,
-                      color: Color(0xFF8A9E90),
-                      size: 16,
-                    ),
+                    const Icon(Icons.calendar_today,
+                        color: Color(0xFF8A9E90), size: 16),
                     const SizedBox(width: 10),
                     Text(
                       '${_expiryDate.day}/${_expiryDate.month}/${_expiryDate.year}',
                       style: const TextStyle(
-                        color: Color(0xFFF5EFE0),
-                        fontSize: 14,
-                      ),
+                          color: Color(0xFFF5EFE0), fontSize: 14),
                     ),
                   ],
                 ),
@@ -218,23 +232,50 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
             ),
             const SizedBox(height: 20),
 
-            _label('Price (optional)'),
-            TextField(
-              controller: _priceController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: Color(0xFFF5EFE0)),
-              decoration: _inputDecoration('e.g. 2.95'),
-            ),
-            const SizedBox(height: 20),
-
-            _label('Unit (optional)'),
-            TextField(
-              controller: _unitController,
-              style: const TextStyle(color: Color(0xFFF5EFE0)),
-              decoration: _inputDecoration('e.g. L, kg, pack'),
+            // Price + Currency on same line
+            _label('Price & Currency'),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Price field
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: _priceController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                    ],
+                    style: const TextStyle(color: Color(0xFFF5EFE0)),
+                    decoration: _inputDecoration('e.g. 2.95'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Currency dropdown
+                Expanded(
+                  flex: 2,
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedCurrency,
+                    dropdownColor: const Color(0xFF232B25),
+                    style: const TextStyle(color: Color(0xFFF5EFE0)),
+                    decoration: _inputDecoration(''),
+                    isExpanded: true,
+                    items: _currencies.map((c) {
+                      return DropdownMenuItem<String>(
+                        value: c,
+                        child: Text(c),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) setState(() => _selectedCurrency = v);
+                    },
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 32),
 
+            // Save button
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -285,18 +326,12 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
 
   String _categoryLabel(ItemCategory category) {
     switch (category) {
-      case ItemCategory.dairy:
-        return 'Dairy';
-      case ItemCategory.veggies:
-        return 'Veggies';
-      case ItemCategory.fruit:
-        return 'Fruit';
-      case ItemCategory.protein:
-        return 'Protein';
-      case ItemCategory.grains:
-        return 'Grains';
-      case ItemCategory.other:
-        return 'Other';
+      case ItemCategory.dairy:   return 'Dairy';
+      case ItemCategory.veggies: return 'Veggies';
+      case ItemCategory.fruit:   return 'Fruit';
+      case ItemCategory.protein: return 'Protein';
+      case ItemCategory.grains:  return 'Grains';
+      case ItemCategory.other:   return 'Other';
     }
   }
 
