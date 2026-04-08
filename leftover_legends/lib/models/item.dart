@@ -1,7 +1,3 @@
-// lib/models/item.dart
-// The core data model for a fridge item.
-// Both engineers import this — agree on any changes before editing.
-
 enum ItemCategory { dairy, veggies, fruit, protein, grains, other }
 
 enum ExpiryStatus { danger, warn, good }
@@ -13,6 +9,9 @@ class FridgeItem {
   final DateTime expiryDate;
   final ItemCategory category;
   final DateTime addedAt;
+  final String ownerId;
+  final double? price;
+  final String? unit;
 
   const FridgeItem({
     required this.id,
@@ -21,71 +20,106 @@ class FridgeItem {
     required this.expiryDate,
     required this.category,
     required this.addedAt,
+    required this.ownerId,
+    this.price,
+    this.unit,
   });
 
-  // How many days until expiry (can be negative if already expired)
-  int get daysLeft =>
-      expiryDate.difference(DateTime.now()).inDays;
+  int get daysLeft => expiryDate.difference(DateTime.now()).inDays;
 
-  // Traffic-light status used by the UI for colours and badges
   ExpiryStatus get status {
     if (daysLeft <= 1) return ExpiryStatus.danger;
     if (daysLeft <= 4) return ExpiryStatus.warn;
     return ExpiryStatus.good;
   }
 
-  // Human-readable category label
   String get categoryLabel {
     switch (category) {
-      case ItemCategory.dairy:   return 'Dairy';
-      case ItemCategory.veggies: return 'Veggies';
-      case ItemCategory.fruit:   return 'Fruit';
-      case ItemCategory.protein: return 'Protein';
-      case ItemCategory.grains:  return 'Grains';
-      case ItemCategory.other:   return 'Other';
+      case ItemCategory.dairy:
+        return 'Dairy';
+      case ItemCategory.veggies:
+        return 'Veggies';
+      case ItemCategory.fruit:
+        return 'Fruit';
+      case ItemCategory.protein:
+        return 'Protein';
+      case ItemCategory.grains:
+        return 'Grains';
+      case ItemCategory.other:
+        return 'Other';
     }
   }
 
-  // Human-readable expiry label shown in the badge
   String get expiryLabel {
-    if (daysLeft < 0)  return 'Expired';
+    if (daysLeft < 0) return 'Expired';
     if (daysLeft == 0) return 'Expires today';
     if (daysLeft == 1) return 'Expires tomorrow';
     return '$daysLeft days left';
   }
 
-  // Serialise to/from JSON for shared_preferences storage
-  Map<String, dynamic> toJson() => {
-    'id':         id,
-    'name':       name,
-    'emoji':      emoji,
-    'expiryDate': expiryDate.toIso8601String(),
-    'category':   category.index,
-    'addedAt':    addedAt.toIso8601String(),
-  };
+  Map<String, dynamic> toAppwriteMap() => {
+        'name': name,
+        'emoji': emoji,
+        'expirationDate': expiryDate.toIso8601String(),
+        'category': category.name,
+        'ownerId': ownerId,
+        'price': price,
+        'unit': unit,
+      };
 
-  factory FridgeItem.fromJson(Map<String, dynamic> json) => FridgeItem(
-    id:         json['id'] as String,
-    name:       json['name'] as String,
-    emoji:      json['emoji'] as String,
-    expiryDate: DateTime.parse(json['expiryDate'] as String),
-    category:   ItemCategory.values[json['category'] as int],
-    addedAt:    DateTime.parse(json['addedAt'] as String),
-  );
+  factory FridgeItem.fromAppwrite(Map<String, dynamic> json) {
+    return FridgeItem(
+      id: json[r'$id'] as String,
+      name: json['name'] as String? ?? '',
+      emoji: json['emoji'] as String? ?? '🍽️',
+      expiryDate: DateTime.parse(json['expirationDate'] as String),
+      category: _categoryFromString(json['category'] as String?),
+      addedAt: DateTime.parse(
+        json[r'$createdAt'] as String? ?? DateTime.now().toIso8601String(),
+      ),
+      ownerId: json['ownerId'] as String? ?? '',
+      price: (json['price'] as num?)?.toDouble(),
+      unit: json['unit'] as String?,
+    );
+  }
 
-  // Returns a copy with updated fields (useful for edit screens)
+  static ItemCategory _categoryFromString(String? value) {
+    switch (value) {
+      case 'dairy':
+        return ItemCategory.dairy;
+      case 'veggies':
+        return ItemCategory.veggies;
+      case 'fruit':
+        return ItemCategory.fruit;
+      case 'protein':
+        return ItemCategory.protein;
+      case 'grains':
+        return ItemCategory.grains;
+      default:
+        return ItemCategory.other;
+    }
+  }
+
   FridgeItem copyWith({
-    String?       name,
-    String?       emoji,
-    DateTime?     expiryDate,
+    String? name,
+    String? emoji,
+    DateTime? expiryDate,
     ItemCategory? category,
-  }) =>
-      FridgeItem(
-        id:         id,
-        name:       name ?? this.name,
-        emoji:      emoji ?? this.emoji,
-        expiryDate: expiryDate ?? this.expiryDate,
-        category:   category ?? this.category,
-        addedAt:    addedAt,
-      );
+    DateTime? addedAt,
+    String? ownerId,
+    double? price,
+    String? unit,
+  }) {
+    return FridgeItem(
+      id: id,
+      name: name ?? this.name,
+      emoji: emoji ?? this.emoji,
+      expiryDate: expiryDate ?? this.expiryDate,
+      category: category ?? this.category,
+      addedAt: addedAt ?? this.addedAt,
+      ownerId: ownerId ?? this.ownerId,
+      price: price ?? this.price,
+      unit: unit ?? this.unit,
+    );
+  }
 }

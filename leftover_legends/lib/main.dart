@@ -1,13 +1,9 @@
-// lib/main.dart
-// App entry point. Do not put business logic here.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'router.dart';
 
 void main() {
   runApp(
-    // ProviderScope enables Riverpod throughout the entire app
     const ProviderScope(
       child: LeftoverLegendsApp(),
     ),
@@ -25,7 +21,7 @@ class LeftoverLegendsApp extends StatelessWidget {
       routerConfig: appRouter,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF5C9E6E), // green from the mockup
+          seedColor: const Color(0xFF5C9E6E),
           brightness: Brightness.dark,
         ),
         useMaterial3: true,

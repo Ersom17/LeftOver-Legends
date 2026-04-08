@@ -1,61 +1,94 @@
-// lib/providers/item_provider.dart
-// State management layer — shared between both engineers.
-// To switch from mock to real storage, change MockItemRepository
-// to LocalItemRepository on line 16. That's the only change needed.
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/item.dart';
 import '../repositories/item_repository.dart';
-// import '../repositories/mock_item_repository.dart';
-import '../repositories/local_item_repository.dart'; // ← real storage
+import '../repositories/appwrite_item_repository.dart';
+import 'auth_provider.dart';
 
-// The repository provider — swap implementation here
 final repositoryProvider = Provider<ItemRepository>((ref) {
-  // return MockItemRepository();
-  return LocalItemRepository(); // ← real localStorage persistence
+  final authState = ref.watch(authProvider);
+  final user = authState.value;
+
+  if (user == null) {
+    throw Exception('User not logged in');
+  }
+
+  return AppwriteItemRepository(user.$id);
 });
 
-// The main items state notifier
 class ItemNotifier extends AsyncNotifier<List<FridgeItem>> {
-  late ItemRepository _repo;
-
   @override
   Future<List<FridgeItem>> build() async {
-    _repo = ref.read(repositoryProvider);
-    return _repo.getAll();
+    ref.watch(authProvider);
+
+    final authState = ref.read(authProvider);
+    final user = authState.value;
+
+    if (user == null) {
+      return [];
+    }
+
+    final repo = AppwriteItemRepository(user.$id);
+    return repo.getAll();
+  }
+
+  Future<void> refreshItems() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final authState = ref.read(authProvider);
+      final user = authState.value;
+
+      if (user == null) return <FridgeItem>[];
+
+      final repo = AppwriteItemRepository(user.$id);
+      return repo.getAll();
+    });
   }
 
   Future<void> addItem(FridgeItem item) async {
-    await _repo.add(item);
-    state = AsyncData(await _repo.getAll());
+    final authState = ref.read(authProvider);
+    final user = authState.value;
+
+    if (user == null) return;
+
+    final repo = AppwriteItemRepository(user.$id);
+    await repo.add(item);
+    state = AsyncData(await repo.getAll());
   }
 
   Future<void> deleteItem(String id) async {
-    await _repo.delete(id);
-    state = AsyncData(await _repo.getAll());
+    final authState = ref.read(authProvider);
+    final user = authState.value;
+
+    if (user == null) return;
+
+    final repo = AppwriteItemRepository(user.$id);
+    await repo.delete(id);
+    state = AsyncData(await repo.getAll());
   }
 
   Future<void> updateItem(FridgeItem item) async {
-    await _repo.update(item);
-    state = AsyncData(await _repo.getAll());
+    final authState = ref.read(authProvider);
+    final user = authState.value;
+
+    if (user == null) return;
+
+    final repo = AppwriteItemRepository(user.$id);
+    await repo.update(item);
+    state = AsyncData(await repo.getAll());
   }
 }
 
-// The provider screens watch
 final itemsProvider =
     AsyncNotifierProvider<ItemNotifier, List<FridgeItem>>(ItemNotifier.new);
 
-// Filter mode enum
 enum FilterMode { all, expiring, fresh }
 
-// Filter state provider
 final filterProvider = StateProvider<FilterMode>((ref) => FilterMode.all);
 
-// Filtered + sorted items provider
 final filteredItemsProvider = Provider<AsyncValue<List<FridgeItem>>>((ref) {
   final mode = ref.watch(filterProvider);
+
   return ref.watch(itemsProvider).whenData((items) {
-    // Sort by expiry date, soonest first
     final sorted = [...items]
       ..sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
 
@@ -69,19 +102,7 @@ final filteredItemsProvider = Provider<AsyncValue<List<FridgeItem>>>((ref) {
                 i.status == ExpiryStatus.warn)
             .toList();
       case FilterMode.fresh:
-        return sorted
-            .where((i) => i.status == ExpiryStatus.good)
-            .toList();
+        return sorted.where((i) => i.status == ExpiryStatus.good).toList();
     }
   });
-});
-
-// Convenience provider: items filtered by expiry status
-// Usage: ref.watch(expiringItemsProvider) in any screen
-final expiringItemsProvider = Provider<AsyncValue<List<FridgeItem>>>((ref) {
-  return ref.watch(itemsProvider).whenData(
-    (items) => items
-        .where((i) => i.status != ExpiryStatus.good)
-        .toList(),
-  );
 });
