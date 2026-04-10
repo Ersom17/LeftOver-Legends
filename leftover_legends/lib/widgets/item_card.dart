@@ -1,11 +1,10 @@
-// lib/widgets/item_card.dart
-// Reusable card shown in the fridge list. Engineer 1 owns this.
-// Colour-coded left border based on expiry status.
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/item.dart';
+import '../providers/item_provider.dart';
+import '../services/item_removal_service.dart';
 
-class ItemCard extends StatelessWidget {
+class ItemCard extends ConsumerWidget {
   final FridgeItem item;
   final VoidCallback? onDelete;
   final VoidCallback? onTap;
@@ -19,22 +18,54 @@ class ItemCard extends StatelessWidget {
 
   Color get _borderColor {
     switch (item.status) {
-      case ExpiryStatus.danger: return const Color(0xFFC05050);
-      case ExpiryStatus.warn:   return const Color(0xFFE8A838);
-      case ExpiryStatus.good:   return const Color(0xFF6BAF7A);
+      case ExpiryStatus.danger:
+        return const Color(0xFFC05050);
+      case ExpiryStatus.warn:
+        return const Color(0xFFE8A838);
+      case ExpiryStatus.good:
+        return const Color(0xFF6BAF7A);
     }
   }
 
   Color get _badgeBg {
     switch (item.status) {
-      case ExpiryStatus.danger: return const Color(0x22C05050);
-      case ExpiryStatus.warn:   return const Color(0x22E8A838);
-      case ExpiryStatus.good:   return const Color(0x226BAF7A);
+      case ExpiryStatus.danger:
+        return const Color(0x22C05050);
+      case ExpiryStatus.warn:
+        return const Color(0x22E8A838);
+      case ExpiryStatus.good:
+        return const Color(0x226BAF7A);
     }
   }
 
+  void _showRemovalSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ItemRemovalSheet(
+        itemName: item.name,
+        itemEmoji: item.emoji,
+        onThrownAway: () {
+          ref
+              .read(itemsProvider.notifier)
+              .removeItem(item.id, ItemRemovalReason.thrownAway);
+        },
+        onConsumed: () {
+          ref
+              .read(itemsProvider.notifier)
+              .removeItem(item.id, ItemRemovalReason.consumed);
+        },
+        onDeleted: () {
+          ref
+              .read(itemsProvider.notifier)
+              .removeItem(item.id, ItemRemovalReason.deleted);
+        },
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -110,13 +141,15 @@ class ItemCard extends StatelessWidget {
             ),
             const SizedBox(width: 8),
 
-            // Delete button
-            if (onDelete != null)
-              GestureDetector(
-                onTap: onDelete,
-                child: const Icon(Icons.chevron_right,
-                    color: Color(0xFF3A4540), size: 20),
+            // Delete button (now opens removal sheet)
+            GestureDetector(
+              onTap: () => _showRemovalSheet(context, ref),
+              child: Icon(
+                Icons.more_vert,
+                color: const Color(0xFF3A4540),
+                size: 20,
               ),
+            ),
           ],
         ),
       ),

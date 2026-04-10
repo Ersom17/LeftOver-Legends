@@ -2,7 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/item.dart';
 import '../repositories/item_repository.dart';
 import '../repositories/appwrite_item_repository.dart';
+import '../services/item_removal_service.dart';
 import 'auth_provider.dart';
+
+final itemRemovalServiceProvider = Provider<ItemRemovalService>((ref) {
+  return ItemRemovalService();
+});
 
 final repositoryProvider = Provider<ItemRepository>((ref) {
   final authState = ref.watch(authProvider);
@@ -53,6 +58,29 @@ class ItemNotifier extends AsyncNotifier<List<FridgeItem>> {
     final repo = AppwriteItemRepository(user.$id);
     await repo.add(item);
     state = AsyncData(await repo.getAll());
+  }
+
+  /// Delete an item with a removal reason
+  /// - [ItemRemovalReason.thrownAway]: Increments totalWasted counter
+  /// - [ItemRemovalReason.consumed]: Just deletes the item
+  /// - [ItemRemovalReason.deleted]: Just deletes the item
+  Future<void> removeItem(
+    String itemId,
+    ItemRemovalReason reason,
+  ) async {
+    final authState = ref.read(authProvider);
+    final user = authState.value;
+
+    if (user == null) return;
+
+    final removalService = ref.read(itemRemovalServiceProvider);
+    await removalService.removeItem(
+      itemId: itemId,
+      userId: user.$id,
+      reason: reason,
+    );
+
+    state = AsyncData(await AppwriteItemRepository(user.$id).getAll());
   }
 
   Future<void> deleteItem(String id) async {
