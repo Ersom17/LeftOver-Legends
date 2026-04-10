@@ -1,4 +1,4 @@
-// lib/screens/fridge_screen.dart (Updated)
+// lib/screens/fridge_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +14,7 @@ import 'recipes_screen.dart';
 import 'recipe_options_sheet.dart';
 import '../providers/receipt_provider.dart';
 import 'receipt_review_screen.dart';
+import 'rewards_screen.dart';
 
 class FridgeScreen extends ConsumerWidget {
   const FridgeScreen({super.key});
@@ -171,10 +172,16 @@ class FridgeScreen extends ConsumerWidget {
         currentIndex: 0,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Discover'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.card_giftcard), label: 'Rewards'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
         onTap: (index) {
+          if (index == 1) {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RewardsScreen()),
+            );
+          }
           if (index == 2) {
             context.push('/profile');
           }
@@ -214,11 +221,9 @@ class _GenerateRecipesButtonState
   }
 
   Future<void> _generate() async {
-    // Get the default culture and country for this user
     final defaultCulture = ref.read(userDefaultCultureProvider);
     final defaultCountry = ref.read(userCountryProvider);
-    
-    // Show options sheet and pre-select the default culture and country
+
     final options = await showModalBottomSheet<RecipeOptions>(
       context: context,
       isScrollControlled: true,
@@ -234,7 +239,6 @@ class _GenerateRecipesButtonState
       ),
     );
 
-    // User dismissed the sheet without tapping Generate
     if (options == null) return;
 
     setState(() => _loading = true);
