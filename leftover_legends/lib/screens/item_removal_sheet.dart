@@ -1,21 +1,90 @@
 import 'package:flutter/material.dart';
-import '../services/item_removal_service.dart';
+import '../models/item.dart';
+import '../repositories/appwrite_item_repository.dart';
 
-class ItemRemovalSheet extends StatelessWidget {
-  final String itemName;
-  final String itemEmoji;
-  final VoidCallback onThrownAway;
+class ItemRemovalSheet extends StatefulWidget {
+  final FridgeItem item;
+  final VoidCallback onThrowAway;
   final VoidCallback onConsumed;
-  final VoidCallback onDeleted;
+  final VoidCallback onDelete;
 
   const ItemRemovalSheet({
     super.key,
-    required this.itemName,
-    required this.itemEmoji,
-    required this.onThrownAway,
+    required this.item,
+    required this.onThrowAway,
     required this.onConsumed,
-    required this.onDeleted,
+    required this.onDelete,
   });
+
+  @override
+  State<ItemRemovalSheet> createState() => _ItemRemovalSheetState();
+}
+
+class _ItemRemovalSheetState extends State<ItemRemovalSheet> {
+  bool _processing = false;
+
+  Future<void> _handleThrowAway() async {
+    setState(() => _processing = true);
+    try {
+      final repo = AppwriteItemRepository(widget.item.ownerId);
+      await repo.markAsWaste(widget.item);
+      
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onThrowAway();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  Future<void> _handleConsumed() async {
+    setState(() => _processing = true);
+    try {
+      final repo = AppwriteItemRepository(widget.item.ownerId);
+      await repo.markAsConsumed(widget.item);
+      
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onConsumed();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  Future<void> _handleDelete() async {
+    setState(() => _processing = true);
+    try {
+      final repo = AppwriteItemRepository(widget.item.ownerId);
+      await repo.delete(widget.item.id);
+      
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onDelete();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,187 +93,148 @@ class ItemRemovalSheet extends StatelessWidget {
         color: Color(0xFF1A1F1C),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Drag handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2E3830),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Item preview
-              Row(
-                children: [
-                  Text(itemEmoji, style: const TextStyle(fontSize: 32)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'What happened to this item?',
-                          style: TextStyle(
-                            color: Color(0xFFF5EFE0),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Text(
+                      widget.item.emoji,
+                      style: const TextStyle(fontSize: 32),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'What happened to this item?',
+                            style: TextStyle(
+                              color: Color(0xFFF5EFE0),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          itemName,
-                          style: const TextStyle(
-                            color: Color(0xFF8A9E90),
-                            fontSize: 13,
+                          Text(
+                            widget.item.name,
+                            style: const TextStyle(
+                              color: Color(0xFF8A9E90),
+                              fontSize: 14,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Options
-              _RemovalOption(
-                emoji: '🗑️',
-                title: 'Thrown away',
-                subtitle: 'It went to waste',
-                color: const Color(0xFFC05050),
-                onTap: () {
-                  Navigator.pop(context);
-                  onThrownAway();
-                },
-              ),
-              const SizedBox(height: 12),
-
-              _RemovalOption(
-                emoji: '😋',
-                title: 'Consumed',
-                subtitle: 'You ate it',
-                color: const Color(0xFF6BAF7A),
-                onTap: () {
-                  Navigator.pop(context);
-                  onConsumed();
-                },
-              ),
-              const SizedBox(height: 12),
-
-              _RemovalOption(
-                emoji: '❌',
-                title: 'Delete',
-                subtitle: 'Remove from fridge',
-                color: const Color(0xFF8A9E90),
-                onTap: () {
-                  Navigator.pop(context);
-                  onDeleted();
-                },
-              ),
-              const SizedBox(height: 12),
-
-              // Cancel button
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF8A9E90),
-                    side: const BorderSide(color: Color(0xFF2E3830)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+
+                // Thrown away option
+                _actionButton(
+                  icon: '🗑️',
+                  title: 'Thrown away',
+                  subtitle: 'It went to waste',
+                  borderColor: const Color(0xFFC05050),
+                  onTap: _processing ? null : _handleThrowAway,
+                ),
+                const SizedBox(height: 12),
+
+                // Consumed option
+                _actionButton(
+                  icon: '😋',
+                  title: 'Consumed',
+                  subtitle: 'You ate it',
+                  borderColor: const Color(0xFF6BAF7A),
+                  onTap: _processing ? null : _handleConsumed,
+                ),
+                const SizedBox(height: 12),
+
+                // Delete option
+                _actionButton(
+                  icon: '❌',
+                  title: 'Delete',
+                  subtitle: 'Remove from fridge',
+                  borderColor: const Color(0xFF2E3830),
+                  onTap: _processing ? null : _handleDelete,
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-}
 
-class _RemovalOption extends StatelessWidget {
-  final String emoji;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _RemovalOption({
-    required this.emoji,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _actionButton({
+    required String icon,
+    required String title,
+    required String subtitle,
+    required Color borderColor,
+    required VoidCallback? onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.25)),
-        ),
-        child: Row(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 22)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+      child: Opacity(
+        opacity: onTap == null ? 0.5 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF232B25),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor.withOpacity(0.5), width: 1.5),
+          ),
+          child: Row(
+            children: [
+              Text(icon, style: const TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: borderColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: color.withOpacity(0.7),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: borderColor.withOpacity(0.7),
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: color.withOpacity(0.5),
-              size: 20,
-            ),
-          ],
+              if (_processing)
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(borderColor),
+                  ),
+                )
+              else
+                Icon(
+                  Icons.chevron_right,
+                  color: borderColor.withOpacity(0.5),
+                ),
+            ],
+          ),
         ),
       ),
     );
