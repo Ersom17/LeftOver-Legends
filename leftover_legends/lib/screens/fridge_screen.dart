@@ -15,6 +15,7 @@ import 'recipe_options_sheet.dart';
 import '../providers/receipt_provider.dart';
 import 'receipt_review_screen.dart';
 import 'rewards_screen.dart';
+import 'learn_screen.dart';
 
 class FridgeScreen extends ConsumerWidget {
   const FridgeScreen({super.key});
@@ -171,18 +172,35 @@ class FridgeScreen extends ConsumerWidget {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.card_giftcard), label: 'Rewards'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.menu_book_outlined),
+            label: 'Learn',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.card_giftcard),
+            label: 'Rewards',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
+          ),
         ],
         onTap: (index) {
           if (index == 1) {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RewardsScreen()),
+              MaterialPageRoute(builder: (_) => const LearnScreen()),
             );
           }
           if (index == 2) {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RewardsScreen()),
+            );
+          }
+          if (index == 3) {
             context.push('/profile');
           }
         },
@@ -243,9 +261,8 @@ class _GenerateRecipesButtonState
 
     setState(() => _loading = true);
     try {
-      final validItems = widget.items
-          .where((item) => item.daysLeft >= 0)
-          .toList();
+      final validItems =
+          widget.items.where((item) => item.daysLeft >= 0).toList();
 
       final result = await ref.read(recipeServiceProvider).generateRecipes(
             items: validItems,
