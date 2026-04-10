@@ -11,6 +11,8 @@ import '../widgets/item_card.dart';
 import '../providers/recipe_provider.dart';
 import 'recipes_screen.dart';
 import 'recipe_options_sheet.dart';
+import '../providers/receipt_provider.dart';
+import 'receipt_review_screen.dart';
 
 class FridgeScreen extends ConsumerWidget {
   const FridgeScreen({super.key});
@@ -98,9 +100,71 @@ class FridgeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/add'),
-        child: const Icon(Icons.add),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final source = await showModalBottomSheet<String>(
+            context: context,
+            builder: (context) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.add),
+                    title: const Text('Add manually'),
+                    onTap: () => Navigator.pop(context, 'manual'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.photo_camera),
+                    title: const Text('Scan receipt'),
+                    onTap: () => Navigator.pop(context, 'scan'),
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          if (source == 'manual') {
+            if (context.mounted) context.push('/add');
+            return;
+          }
+
+          if (source == 'scan') {
+            try {
+              final result = await ref
+                  .read(receiptScanServiceProvider)
+                  .scanReceiptFromCamera();
+
+              if (result == null || result.items.isEmpty) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No items detected.')),
+                  );
+                }
+                return;
+              }
+
+              if (!context.mounted) return;
+
+              final added = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) => ReceiptReviewScreen(items: result.items),
+                ),
+              );
+
+              if (added == true) {
+                ref.read(itemsProvider.notifier).refreshItems();
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Receipt scan failed: $e')),
+                );
+              }
+            }
+          }
+        },
+        icon: const Icon(Icons.receipt_long),
+        label: const Text('Add item'),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
