@@ -6,6 +6,7 @@ import '../models/item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/item_provider.dart';
 import '../providers/user_settings_provider.dart';
+import '../services/country_config_service.dart';
 
 class AddItemScreen extends ConsumerStatefulWidget {
   const AddItemScreen({super.key});
@@ -21,13 +22,11 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
   ItemCategory _selectedCategory = ItemCategory.other;
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 5));
   String _selectedEmoji = '🍽️';
-  late String _selectedCurrency;
+  String? _selectedCurrency;
   bool _saving = false;
 
-  static const _currencies = [
-    'CHF', 'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CNY', 'INR', 'BRL',
-    'MXN', 'KRW', 'SGD', 'HKD', 'NOK', 'SEK', 'DKK', 'PLN', 'CZK', 'TRY',
-  ];
+  // Top 10 currencies by usage + all others sorted
+  late List<String> _currencies;
 
   static const _emojiOptions = [
     // Dairy
@@ -51,20 +50,36 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize currency after widget is built to access ref
+    // Build currency list from country config service
+    _buildCurrencyList();
+    
+    // Initialize currency after widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final defaultCurrency = ref.read(userCurrencyProvider);
-      setState(() {
-        _selectedCurrency = defaultCurrency;
-      });
+      if (mounted) {
+        setState(() {
+          _selectedCurrency = defaultCurrency;
+        });
+      }
     });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Set default currency when dependencies change
-    _selectedCurrency = ref.read(userCurrencyProvider);
+  void _buildCurrencyList() {
+    // Top 10 most used currencies
+    const topCurrencies = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'CNY', 'INR', 'BRL'];
+    
+    // Get all unique currencies from country config
+    final allCurrencies = <String>{};
+    for (final config in CountryConfigService.countryConfigs.values) {
+      allCurrencies.add(config.currency);
+    }
+    
+    // Separate top and others
+    final topSet = topCurrencies.toSet();
+    final others = allCurrencies.where((c) => !topSet.contains(c)).toList()..sort();
+    
+    // Combine: top 10 first, then others
+    _currencies = [...topCurrencies, ...others];
   }
 
   @override
@@ -99,7 +114,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
         addedAt: DateTime.now(),
         ownerId: user.$id,
         price: price,
-        unit: _selectedCurrency,
+        unit: _selectedCurrency ?? 'CHF',
       );
 
       await ref.read(itemsProvider.notifier).addItem(item);
@@ -146,8 +161,8 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
     // Get the default currency for this user
     final defaultCurrency = ref.watch(userCurrencyProvider);
     
-    // Update selected currency if it's the first build
-    if (_selectedCurrency.isEmpty) {
+    // Initialize currency on first build if not already set
+    if (_selectedCurrency == null) {
       _selectedCurrency = defaultCurrency;
     }
 
@@ -279,7 +294,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Currency dropdown - shows default from country
+                // Currency dropdown - all world currencies
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<String>(

@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'screens/login_screen.dart';
 import 'screens/fridge_screen.dart';
 import 'screens/add_item_screen.dart';
+import 'screens/profile_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/login',
@@ -17,6 +18,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/add',
       builder: (context, state) => const AddItemScreen(),
+    ),
+    GoRoute(
+      path: '/profile',
+      builder: (context, state) => const ProfileScreen(),
     ),
   ],
 );

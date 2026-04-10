@@ -1,4 +1,4 @@
-// lib/screens/fridge_screen.dart (Updated _GenerateRecipesButton section)
+// lib/screens/fridge_screen.dart (Updated)
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -174,6 +174,11 @@ class FridgeScreen extends ConsumerWidget {
           BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Discover'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
+        onTap: (index) {
+          if (index == 2) {
+            context.push('/profile');
+          }
+        },
       ),
     );
   }
@@ -209,10 +214,11 @@ class _GenerateRecipesButtonState
   }
 
   Future<void> _generate() async {
-    // Get the default culture for this user's country
+    // Get the default culture and country for this user
     final defaultCulture = ref.read(userDefaultCultureProvider);
+    final defaultCountry = ref.read(userCountryProvider);
     
-    // Show options sheet and pre-select the default culture
+    // Show options sheet and pre-select the default culture and country
     final options = await showModalBottomSheet<RecipeOptions>(
       context: context,
       isScrollControlled: true,
@@ -221,7 +227,10 @@ class _GenerateRecipesButtonState
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: RecipeOptionsSheet(defaultCulture: defaultCulture),
+        child: RecipeOptionsSheet(
+          defaultCulture: defaultCulture,
+          defaultCountry: defaultCountry,
+        ),
       ),
     );
 
