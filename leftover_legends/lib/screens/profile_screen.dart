@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_profile_provider.dart';
 import '../providers/user_settings_provider.dart';
-import '../services/country_config_service.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -18,7 +17,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   late String _selectedCountry;
 
-  // List of countries for the dropdown
   static const _countries = [
     'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia',
     'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium',
@@ -50,14 +48,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   void initState() {
     super.initState();
     _selectedCountry = ref.read(userCountryProvider);
+    // Refresh profile every time this screen is opened so stats are always current
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(userProfileProvider.notifier).refresh();
+    });
   }
 
   Future<void> _updateCountry(String newCountry) async {
     setState(() => _selectedCountry = newCountry);
-    ref.read(userCountryProvider.notifier).state = newCountry;
-    
-    // TODO: Save country to user_profile in Appwrite
-    // This would require calling the auth service or a new profile service
+    try {
+      await ref.read(userProfileProvider.notifier).updateCountry(newCountry);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Country updated.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save country: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -104,7 +116,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           final totalSpent = profile?.totalSpent ?? 0.0;
           final totalWasted = profile?.totalWasted ?? 0.0;
           final points = profile?.points ?? 0;
-          final country = profile?.country ?? 'Switzerland';
+
+          // Keep dropdown in sync with what was loaded from DB
+          final dbCountry = profile?.country;
+          if (dbCountry != null && dbCountry != _selectedCountry) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _selectedCountry = dbCountry);
+            });
+          }
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -147,7 +166,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 _label('Your stats'),
                 const SizedBox(height: 12),
 
-                // Points Card
                 _statCard(
                   emoji: '⭐',
                   title: 'Points',
@@ -158,7 +176,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Total Spent Card
                 _statCard(
                   emoji: '💰',
                   title: 'Total Spent',
@@ -169,7 +186,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Total Wasted Card
                 _statCard(
                   emoji: '🗑️',
                   title: 'Total Wasted',
@@ -184,7 +200,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 _label('Settings'),
                 const SizedBox(height: 12),
 
-                // Country Selector
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -233,9 +248,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           );
                         }).toList(),
                         onChanged: (value) {
-                          if (value != null) {
-                            _updateCountry(value);
-                          }
+                          if (value != null) _updateCountry(value);
                         },
                       ),
                       const SizedBox(height: 8),

@@ -1,5 +1,4 @@
 // lib/providers/user_profile_provider.dart
-import 'package:appwrite/appwrite.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../appwrite/appwrite_client.dart';
 import '../appwrite/appwrite_constants.dart';
@@ -11,7 +10,7 @@ class UserProfile {
   final String country;
   final int points;
   final double totalSpent;
-  final int totalWasted;
+  final double totalWasted;
 
   const UserProfile({
     required this.ownerId,
@@ -27,40 +26,64 @@ class UserProfile {
       country: json['country'] as String? ?? 'Switzerland',
       points: json['points'] as int? ?? 0,
       totalSpent: (json['totalSpent'] as num?)?.toDouble() ?? 0.0,
-      totalWasted: json['totalWasted'] as int? ?? 0,
+      totalWasted: (json['totalWasted'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
 
-// Fetch user profile from database and update country setting
-final userProfileProvider = FutureProvider<UserProfile?>((ref) async {
-  final authState = ref.watch(authProvider);
-  
-  // If not authenticated, return null
-  if (!authState.hasValue || authState.value == null) {
-    return null;
+class UserProfileNotifier extends AsyncNotifier<UserProfile?> {
+  @override
+  Future<UserProfile?> build() async {
+    final authState = ref.watch(authProvider);
+    if (!authState.hasValue || authState.value == null) return null;
+    return _fetch(authState.value!.$id);
   }
 
-  final user = authState.value!;
-  
-  try {
-    final doc = await databases.getDocument(
-      databaseId: AppwriteConstants.databaseId,
-      collectionId: AppwriteConstants.userProfileTableId,
-      documentId: user.$id,
-    );
-
-    final profile = UserProfile.fromJson(doc.data);
-    
-    // Update the country setting in the provider
-    Future.microtask(() {
-      ref.read(userCountryProvider.notifier).state = profile.country;
-    });
-
-    return profile;
-  } catch (e) {
-    // Profile not found or error fetching it
-    print('Error fetching user profile: $e');
-    return null;
+  Future<UserProfile?> _fetch(String userId) async {
+    try {
+      final doc = await databases.getDocument(
+        databaseId: AppwriteConstants.databaseId,
+        collectionId: AppwriteConstants.userProfileTableId,
+        documentId: userId,
+      );
+      final profile = UserProfile.fromJson(doc.data);
+      Future.microtask(() {
+        ref.read(userCountryProvider.notifier).state = profile.country;
+      });
+      return profile;
+    } catch (e) {
+      print('Error fetching user profile: $e');
+      return null;
+    }
   }
-});
+
+  Future<void> refresh() async {
+    final authState = ref.read(authProvider);
+    if (!authState.hasValue || authState.value == null) return;
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _fetch(authState.value!.$id));
+  }
+
+  Future<void> updateCountry(String country) async {
+    final authState = ref.read(authProvider);
+    if (!authState.hasValue || authState.value == null) return;
+    final userId = authState.value!.$id;
+    try {
+      await databases.updateDocument(
+        databaseId: AppwriteConstants.databaseId,
+        collectionId: AppwriteConstants.userProfileTableId,
+        documentId: userId,
+        data: {'country': country},
+      );
+      ref.read(userCountryProvider.notifier).state = country;
+      await refresh();
+    } catch (e) {
+      print('Error updating country: $e');
+      rethrow;
+    }
+  }
+}
+
+final userProfileProvider =
+    AsyncNotifierProvider<UserProfileNotifier, UserProfile?>(
+        UserProfileNotifier.new);
