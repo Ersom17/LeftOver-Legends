@@ -1,8 +1,4 @@
-// lib/screens/recipe_options_sheet.dart
-//
-// A modal bottom sheet where the user configures recipe generation options
-// (cuisine culture, number of recipes in the future, etc.)
-// Returns a RecipeOptions object when the user taps Generate.
+// lib/screens/recipe_options_sheet.dart (Updated)
 
 import 'package:flutter/material.dart';
 
@@ -13,7 +9,12 @@ class RecipeOptions {
 }
 
 class RecipeOptionsSheet extends StatefulWidget {
-  const RecipeOptionsSheet({super.key});
+  final String defaultCulture;
+
+  const RecipeOptionsSheet({
+    super.key,
+    this.defaultCulture = 'Italian',
+  });
 
   @override
   State<RecipeOptionsSheet> createState() => _RecipeOptionsSheetState();
@@ -41,9 +42,31 @@ class _RecipeOptionsSheetState extends State<RecipeOptionsSheet> {
     ('🇪🇹', 'Ethiopian'),
     ('🇵🇹', 'Portuguese'),
     ('🇩🇪', 'German'),
+    ('🇦🇹', 'Austrian'),
+    ('🇬🇧', 'British'),
+    ('🇸🇪', 'Scandinavian'),
+    ('🇨🇭', 'Swiss'),
+    ('🇵🇱', 'Polish'),
+    ('🇷🇺', 'Russian'),
+    ('🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'Scottish'),
+    ('🇦🇺', 'Australian'),
+    ('🇳🇿', 'Pacific'),
+    ('🌍', 'Caribbean'),
   ];
 
-  String _selectedCulture = 'Italian';
+  late String _selectedCulture;
+
+  @override
+  void initState() {
+    super.initState();
+    // Use the default culture passed in, or Italian as fallback
+    _selectedCulture = widget.defaultCulture;
+    
+    // Verify the culture exists in our list, otherwise use Italian
+    if (!_cultures.any((c) => c.$2 == _selectedCulture)) {
+      _selectedCulture = 'Italian';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,9 +112,13 @@ class _RecipeOptionsSheetState extends State<RecipeOptionsSheet> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Customize your recipe generation',
-                      style: TextStyle(color: Color(0xFF8A9E90), fontSize: 13),
+                    Text(
+                      'Suggested: ${_selectedCulture}',
+                      style: const TextStyle(
+                        color: Color(0xFF5C9E6E),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 24),
 

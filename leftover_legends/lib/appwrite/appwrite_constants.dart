@@ -4,6 +4,7 @@ class AppwriteConstants {
   static const String databaseId = '69d4fce5000a6e19aca9';
 
   static const String itemsTableId = 'item';
+  static const String userProfileTableId = 'user_profile'; // Add this line
   static const String recipeFunctionId = '69d61f280023825a2f5b';
   static const String receiptFunctionId = '69d76bfe00255ed49499';
 }

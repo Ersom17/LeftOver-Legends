@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../models/item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/item_provider.dart';
+import '../providers/user_settings_provider.dart';
 
 class AddItemScreen extends ConsumerStatefulWidget {
   const AddItemScreen({super.key});
@@ -20,7 +21,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
   ItemCategory _selectedCategory = ItemCategory.other;
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 5));
   String _selectedEmoji = '🍽️';
-  String _selectedCurrency = 'CHF';
+  late String _selectedCurrency;
   bool _saving = false;
 
   static const _currencies = [
@@ -46,6 +47,25 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
     // Condiments / Other
     '🫙', '🍳', '🫕', '🥫', '🧂', '🍯', '🫚', '🥜', '🍽️',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize currency after widget is built to access ref
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final defaultCurrency = ref.read(userCurrencyProvider);
+      setState(() {
+        _selectedCurrency = defaultCurrency;
+      });
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Set default currency when dependencies change
+    _selectedCurrency = ref.read(userCurrencyProvider);
+  }
 
   @override
   void dispose() {
@@ -123,6 +143,14 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Get the default currency for this user
+    final defaultCurrency = ref.watch(userCurrencyProvider);
+    
+    // Update selected currency if it's the first build
+    if (_selectedCurrency.isEmpty) {
+      _selectedCurrency = defaultCurrency;
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF1A1F1C),
       appBar: AppBar(
@@ -251,7 +279,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Currency dropdown
+                // Currency dropdown - shows default from country
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<String>(
@@ -272,6 +300,16 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            
+            // Show default currency info
+            Text(
+              'Default: $defaultCurrency',
+              style: const TextStyle(
+                color: Color(0xFF8A9E90),
+                fontSize: 12,
+              ),
             ),
             const SizedBox(height: 32),
 

@@ -24,13 +24,19 @@ class AuthNotifier extends AsyncNotifier<models.User?> {
     );
   }
 
-  Future<void> register(String name, String email, String password) async {
+  Future<void> register(
+    String name,
+    String email,
+    String password,
+    String country,
+  ) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(
       () => ref.read(authServiceProvider).register(
             name: name,
             email: email,
             password: password,
+            country: country,
           ),
     );
   }

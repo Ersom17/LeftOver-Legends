@@ -1,4 +1,4 @@
-// lib/screens/fridge_screen.dart
+// lib/screens/fridge_screen.dart (Updated _GenerateRecipesButton section)
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +7,7 @@ import '../models/item.dart';
 import '../models/recipe.dart';
 import '../providers/auth_provider.dart';
 import '../providers/item_provider.dart';
+import '../providers/user_settings_provider.dart';
 import '../widgets/item_card.dart';
 import '../providers/recipe_provider.dart';
 import 'recipes_screen.dart';
@@ -208,7 +209,10 @@ class _GenerateRecipesButtonState
   }
 
   Future<void> _generate() async {
-    // 1. Show options sheet and wait for user input
+    // Get the default culture for this user's country
+    final defaultCulture = ref.read(userDefaultCultureProvider);
+    
+    // Show options sheet and pre-select the default culture
     final options = await showModalBottomSheet<RecipeOptions>(
       context: context,
       isScrollControlled: true,
@@ -217,7 +221,7 @@ class _GenerateRecipesButtonState
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: const RecipeOptionsSheet(),
+        child: RecipeOptionsSheet(defaultCulture: defaultCulture),
       ),
     );
 
