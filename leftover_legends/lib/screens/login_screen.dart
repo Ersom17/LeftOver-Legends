@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../providers/item_provider.dart';
+import '../providers/user_profile_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -86,6 +87,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     ref.listen(authProvider, (_, next) {
       if (next.hasValue && next.value != null) {
+        ref.invalidate(itemsProvider);
+        ref.invalidate(userProfileProvider);
         context.go('/fridge');
       }
     });

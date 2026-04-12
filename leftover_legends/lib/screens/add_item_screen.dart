@@ -21,14 +21,15 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
 
   ItemCategory _selectedCategory = ItemCategory.other;
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 5));
-  String _selectedEmoji = '🍽️';
+  String _selectedEmoji = '⬜';
   String? _selectedCurrency;
   bool _saving = false;
 
-  // Top 10 currencies by usage + all others sorted
   late List<String> _currencies;
 
   static const _emojiOptions = [
+    // Blank / default
+    '⬜',
     // Dairy
     '🥛', '🧀', '🥚', '🧈', '🍦',
     // Vegetables
@@ -38,7 +39,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
     '🍎', '🍋', '🫐', '🥑', '🍇', '🍓', '🍑', '🥭', '🍍', '🥝',
     '🍊', '🍌', '🍒', '🫒', '🍈',
     // Protein / Meat
-    '🥩', '🍗', '🥓', '🌭', '🍖', '🦐', '🐟', '🦑', '🥚',
+    '🥩', '🍗', '🥓', '🌭', '🍖', '🦐', '🐟', '🦑',
     // Grains / Bread
     '🍞', '🥐', '🥨', '🧇', '🍚', '🍝', '🌮', '🥙', '🫓',
     // Drinks
@@ -50,35 +51,17 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
   @override
   void initState() {
     super.initState();
-    // Build currency list from country config service
     _buildCurrencyList();
-    
-    // Initialize currency after widget is built
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final defaultCurrency = ref.read(userCurrencyProvider);
-      if (mounted) {
-        setState(() {
-          _selectedCurrency = defaultCurrency;
-        });
-      }
-    });
   }
 
   void _buildCurrencyList() {
-    // Top 10 most used currencies
     const topCurrencies = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'CNY', 'INR', 'BRL'];
-    
-    // Get all unique currencies from country config
     final allCurrencies = <String>{};
     for (final config in CountryConfigService.countryConfigs.values) {
       allCurrencies.add(config.currency);
     }
-    
-    // Separate top and others
     final topSet = topCurrencies.toSet();
     final others = allCurrencies.where((c) => !topSet.contains(c)).toList()..sort();
-    
-    // Combine: top 10 first, then others
     _currencies = [...topCurrencies, ...others];
   }
 
@@ -158,10 +141,10 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Get the default currency for this user
+    // userCountryProvider is now always set correctly by AuthNotifier on login,
+    // so these derived providers are always accurate.
     final defaultCurrency = ref.watch(userCurrencyProvider);
-    
-    // Initialize currency on first build if not already set
+
     if (_selectedCurrency == null) {
       _selectedCurrency = defaultCurrency;
     }
@@ -294,7 +277,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Currency dropdown - all world currencies
+                // Currency dropdown
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<String>(
@@ -317,8 +300,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            
-            // Show default currency info
+
             Text(
               'Default: $defaultCurrency',
               style: const TextStyle(
