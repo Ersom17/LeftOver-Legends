@@ -1,24 +1,22 @@
 export default async ({ req, res, log, error }) => {
   try {
-    const hfToken = process.env.HF_TOKEN || req.env?.HF_TOKEN;
-    const ocrKey = process.env.OCR_API_KEY || req.env?.OCR_API_KEY;
+    const hfToken = process.env.HF_TOKEN;
 
     if (!hfToken) {
-      return res.json({ ok: false, error: 'Missing HF_TOKEN environment variable' }, 500);
-    }
-    if (!ocrKey) {
-      return res.json({ ok: false, error: 'Missing OCR_API_KEY environment variable' }, 500);
+      return res.json({ ok: false, error: 'Missing HF_TOKEN' }, 500);
     }
 
-    // Parse body — bodyJson may be null if Content-Type header is missing
+    // Parse body
     let body = {};
     try {
-      body = req.bodyJson ?? (req.body ? JSON.parse(req.body) : {});
-    } catch (_) {
-      body = {};
+      if (req.bodyJson && typeof req.bodyJson === 'object') {
+        body = req.bodyJson;
+      } else if (typeof req.body === 'string' && req.body.trim()) {
+        body = JSON.parse(req.body);
+      }
+    } catch (e) {
+      log(`Body parse error: ${e.message}`);
     }
-
-    log(`Body keys: ${Object.keys(body).join(', ') || 'none'}`);
 
     const base64Image = typeof body.image === 'string' ? body.image.trim() : '';
 
@@ -26,52 +24,13 @@ export default async ({ req, res, log, error }) => {
       return res.json({ ok: false, error: 'Missing image (base64)' }, 400);
     }
 
-    // --- Step 1: OCR with ocr.space (free tier, no npm packages needed) ---
-    log('Running OCR via ocr.space...');
+    log(`Image received, length: ${base64Image.length}`);
 
-    const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
-      method: 'POST',
-      headers: {
-        'apikey': ocrKey,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        base64Image: `data:image/jpeg;base64,${base64Image}`,
-        language: 'eng',
-        isOverlayRequired: 'false',
-        detectOrientation: 'true',
-        scale: 'true',
-        OCREngine: '2',
-      }).toString(),
-    });
-
-    const ocrResult = await ocrResponse.json();
-
-    if (ocrResult.IsErroredOnProcessing) {
-      return res.json({ ok: false, error: `OCR failed: ${ocrResult.ErrorMessage}` }, 500);
-    }
-
-    const rawText = ocrResult.ParsedResults?.[0]?.ParsedText ?? '';
-    log(`OCR extracted ${rawText.length} chars`);
-
-    if (!rawText.trim()) {
-      return res.json({ ok: false, error: 'No text found in image.' }, 400);
-    }
-
-    // --- Step 2: Parse items with Llama 3.1 8B ---
     const today = new Date().toISOString().slice(0, 10);
 
-    const systemPrompt = `
-You are a grocery receipt parser.
-Always answer with valid JSON only.
-Do not add markdown fences.
-Do not add explanations.
-`;
+    const prompt = `You are a grocery receipt parser. Look at this receipt image and extract all grocery items.
 
-    const userPrompt = `
-You receive OCR text extracted from a grocery receipt.
-
-Return ONLY valid JSON in this exact format:
+Return ONLY valid JSON with no markdown fences, no explanation, just the JSON:
 
 {
   "items": [
@@ -80,32 +39,24 @@ Return ONLY valid JSON in this exact format:
       "category": "dairy|veggies|fruit|protein|grains|other",
       "emoji": "string",
       "estimatedExpirationDate": "ISO date string",
-      "price": number|null,
+      "price": number or null,
       "currency": "CHF",
-      "quantity": "string|null",
-      "confidence": number,
+      "quantity": "string or null",
+      "confidence": number between 0 and 1,
       "sourceText": "string"
     }
   ]
 }
 
 Rules:
-- Extract only real grocery items a user could store in a fridge or pantry.
-- Ignore store name, address, totals, taxes, discounts, payment lines, loyalty data, timestamps, transaction IDs.
-- Normalize OCR names into clean English product names with no line breaks.
-- Guess category from the item name.
-- Suggest a relevant emoji for each item.
+- Extract only real grocery items a person could store in a fridge or pantry.
+- Ignore store name, address, totals, taxes, discounts, payment lines, timestamps.
+- Use clean English product names.
 - Estimate expiration date based on typical shelf life from today: ${today}.
-- confidence is a number between 0 and 1.
-- price is the line-item price when visible, otherwise null.
-- currency defaults to "CHF" unless another currency is clearly visible.
-- quantity is a short string like "1", "500g", "1L", or null.
-- sourceText is the OCR fragment that produced this item.
-- Return JSON only.
+- currency defaults to CHF unless clearly something else.
+- Return JSON only, nothing else.`;
 
-OCR TEXT:
-${rawText}
-`;
+    log('Sending image to Llama Vision...');
 
     const hfResponse = await fetch(
       'https://router.huggingface.co/v1/chat/completions',
@@ -116,24 +67,37 @@ ${rawText}
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'meta-llama/Llama-3.1-8B-Instruct',
+          model: 'Qwen/Qwen2.5-VL-7B-Instruct',
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:image/jpeg;base64,${base64Image}`,
+                  },
+                },
+                {
+                  type: 'text',
+                  text: prompt,
+                },
+              ],
+            },
           ],
-          temperature: 0.2,
-          max_tokens: 900,
+          temperature: 0.1,
+          max_tokens: 1000,
         }),
       }
     );
 
     const rawApiResponse = await hfResponse.text();
+    log(`HF status: ${hfResponse.status}`);
 
     if (!hfResponse.ok) {
-      log(`HF error status: ${hfResponse.status}`);
-      log(rawApiResponse);
+      log(`HF error: ${rawApiResponse}`);
       return res.json(
-        { ok: false, error: 'Hugging Face request failed', status: hfResponse.status, details: rawApiResponse },
+        { ok: false, error: 'Hugging Face request failed', details: rawApiResponse },
         500
       );
     }
@@ -143,19 +107,22 @@ ${rawText}
       parsedApiResponse = JSON.parse(rawApiResponse);
     } catch (e) {
       return res.json(
-        { ok: false, error: 'Invalid JSON from Hugging Face API', details: rawApiResponse },
+        { ok: false, error: 'Invalid JSON from HF API', details: rawApiResponse },
         500
       );
     }
 
     let generatedText = parsedApiResponse?.choices?.[0]?.message?.content ?? '';
+    log(`Model response length: ${generatedText.length}`);
+
     if (!generatedText) {
       return res.json(
-        { ok: false, error: 'Unexpected Hugging Face response shape', details: parsedApiResponse },
+        { ok: false, error: 'Empty response from model', details: parsedApiResponse },
         500
       );
     }
 
+    // Strip markdown fences if model added them anyway
     generatedText = generatedText.trim();
     if (generatedText.startsWith('```json')) {
       generatedText = generatedText.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
@@ -163,15 +130,20 @@ ${rawText}
       generatedText = generatedText.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
     }
 
+    // Extract JSON if model added surrounding text
+    const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      generatedText = jsonMatch[0];
+    }
+
     let receiptJson;
     try {
       receiptJson = JSON.parse(generatedText);
     } catch (e) {
-      log('Model raw content:');
-      log(generatedText);
+      log(`Could not parse model output: ${generatedText}`);
       return res.json(
-        { ok: true, warning: 'Model returned text instead of clean JSON', raw: generatedText },
-        200
+        { ok: false, error: 'Model did not return valid JSON', raw: generatedText },
+        500
       );
     }
 
