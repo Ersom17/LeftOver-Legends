@@ -1,6 +1,9 @@
 // lib/screens/add_item_screen.dart
 // R2 — Add item manually. Engineer 1 owns this file.
 // Submits to itemsProvider which persists via the repository.
+// Todo #1 — default emoji is now 📦 (neutral "package").
+// Todo #11 — palette swapped to AppTheme light-mode tokens.
+// Todo #12 — location picker (Fridge / Pantry).
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +11,8 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../models/item.dart';
 import '../providers/item_provider.dart';
+import '../theme/app_theme.dart';
+import '../utils/app_strings.dart';
 
 class AddItemScreen extends ConsumerStatefulWidget {
   const AddItemScreen({super.key});
@@ -19,13 +24,16 @@ class AddItemScreen extends ConsumerStatefulWidget {
 class _AddItemScreenState extends ConsumerState<AddItemScreen> {
   final _nameController = TextEditingController();
   ItemCategory _selectedCategory = ItemCategory.other;
+  // TODO #12 – default storage location is the fridge
+  ItemLocation _selectedLocation = ItemLocation.fridge;
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 5));
-  String _selectedEmoji = '🍽️';
+  // TODO #1 – neutral default emoji (package/box) instead of plate
+  String _selectedEmoji = '📦';
   bool _saving = false;
 
   static const _emojiOptions = [
     '🥛','🧀','🥚','🥦','🍎','🥕','🍳','🧅','🫙','🥩',
-    '🍞','🧈','🍋','🥬','🫐','🥑','🍅','🌽','🍽️',
+    '🍞','🧈','🍋','🥬','🫐','🥑','🍅','🌽','📦',
   ];
 
   @override
@@ -45,6 +53,8 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
       expiryDate: _expiryDate,
       category:   _selectedCategory,
       addedAt:    DateTime.now(),
+      // TODO #12 – persist selected location
+      location:   _selectedLocation,
     );
 
     await ref.read(itemsProvider.notifier).addItem(item);
@@ -58,8 +68,14 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
       firstDate:   DateTime.now(),
       lastDate:    DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) => Theme(
-        data: ThemeData.dark().copyWith(
-          colorScheme: const ColorScheme.dark(primary: Color(0xFF5C9E6E)),
+        // TODO #11 – light date picker with navy accent
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(
+            primary:   AppTheme.navy,
+            onPrimary: AppTheme.white,
+            surface:   AppTheme.surface,
+            onSurface: AppTheme.navy,
+          ),
         ),
         child: child!,
       ),
@@ -70,14 +86,20 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1F1C),
+      backgroundColor: AppTheme.bgOf(context),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1F1C),
-        title: const Text('Add item',
-            style: TextStyle(
-                color: Color(0xFFF5EFE0), fontWeight: FontWeight.w900)),
+        backgroundColor: AppTheme.bgOf(context),
+        foregroundColor: AppTheme.primaryOf(context),
+        elevation: 0,
+        title: Text(
+          AppStrings.of(context, 'addItem'),
+          style: TextStyle(
+            color: AppTheme.primaryOf(context),
+            fontWeight: FontWeight.w900,
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Color(0xFF8A9E90)),
+          icon: Icon(Icons.close, color: AppTheme.secondaryOf(context)),
           onPressed: () => context.pop(),
         ),
       ),
@@ -87,16 +109,16 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Name field
-            _label('Item name'),
+            _label('itemName'),
             TextField(
               controller: _nameController,
-              style: const TextStyle(color: Color(0xFFF5EFE0)),
-              decoration: _inputDecoration('e.g. Whole Milk'),
+              style: TextStyle(color: AppTheme.primaryOf(context)),
+              decoration: _inputDecoration(context, AppStrings.of(context, 'itemNameHint')),
             ),
             const SizedBox(height: 20),
 
             // Emoji picker
-            _label('Pick an emoji'),
+            _label('pickEmoji'),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -109,13 +131,11 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
                     height: 44,
                     decoration: BoxDecoration(
                       color: selected
-                          ? const Color(0xFF5C9E6E22)
-                          : const Color(0xFF232B25),
+                          ? AppTheme.orange.withValues(alpha: 0.15)
+                          : AppTheme.surfaceOf(context),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: selected
-                            ? const Color(0xFF5C9E6E)
-                            : const Color(0xFF2E3830),
+                        color: selected ? AppTheme.orange : AppTheme.borderOf(context),
                       ),
                     ),
                     child: Center(
@@ -128,12 +148,12 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
             const SizedBox(height: 20),
 
             // Category picker
-            _label('Category'),
+            _label('category'),
             DropdownButtonFormField<ItemCategory>(
-              value: _selectedCategory,
-              dropdownColor: const Color(0xFF232B25),
-              style: const TextStyle(color: Color(0xFFF5EFE0)),
-              decoration: _inputDecoration(''),
+              initialValue: _selectedCategory,
+              dropdownColor: AppTheme.surfaceOf(context),
+              style: TextStyle(color: AppTheme.primaryOf(context)),
+              decoration: _inputDecoration(context, ''),
               items: ItemCategory.values
                   .map((c) => DropdownMenuItem(
                         value: c,
@@ -153,27 +173,48 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
             ),
             const SizedBox(height: 20),
 
+            // TODO #12 – location picker (Fridge / Pantry)
+            _label('storedIn'),
+            Builder(builder: (context) => SegmentedButton<ItemLocation>(
+              segments: [
+                ButtonSegment(
+                  value: ItemLocation.fridge,
+                  label: Text(AppStrings.of(context, 'fridgeLocation')),
+                  icon: const Icon(Icons.kitchen),
+                ),
+                ButtonSegment(
+                  value: ItemLocation.pantry,
+                  label: Text(AppStrings.of(context, 'pantry')),
+                  icon: const Icon(Icons.inventory_2),
+                ),
+              ],
+              selected: {_selectedLocation},
+              onSelectionChanged: (s) =>
+                  setState(() => _selectedLocation = s.first),
+            )),
+            const SizedBox(height: 20),
+
             // Expiry date picker
-            _label('Expiry date'),
+            _label('expiryDate'),
             GestureDetector(
               onTap: _pickDate,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF232B25),
+                  color: AppTheme.surfaceOf(context),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF2E3830)),
+                  border: Border.all(color: AppTheme.borderOf(context)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.calendar_today,
-                        color: Color(0xFF8A9E90), size: 16),
+                    Icon(Icons.calendar_today,
+                        color: AppTheme.secondaryOf(context), size: 16),
                     const SizedBox(width: 10),
                     Text(
                       '${_expiryDate.day}/${_expiryDate.month}/${_expiryDate.year}',
-                      style: const TextStyle(
-                          color: Color(0xFFF5EFE0), fontSize: 14),
+                      style: TextStyle(
+                          color: AppTheme.primaryOf(context), fontSize: 14),
                     ),
                   ],
                 ),
@@ -187,7 +228,8 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
               child: FilledButton(
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF5C9E6E),
+                  backgroundColor: AppTheme.orange,
+                  foregroundColor: AppTheme.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -198,10 +240,10 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
+                            strokeWidth: 2, color: AppTheme.white),
                       )
-                    : const Text('Add to fridge',
-                        style: TextStyle(
+                    : Text(AppStrings.of(context, 'addToFridge'),
+                        style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w800)),
               ),
             ),
@@ -211,35 +253,41 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
     );
   }
 
-  Widget _label(String text) => Padding(
+  // text is an AppStrings key — looked up via context inside the Builder.
+  Widget _label(String key) {
+    return Builder(
+      builder: (context) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Text(
-          text,
-          style: const TextStyle(
-            color: Color(0xFF8A9E90),
+          AppStrings.of(context, key),
+          style: TextStyle(
+            color: AppTheme.secondaryOf(context),
             fontSize: 11,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.5,
           ),
         ),
-      );
+      ),
+    );
+  }
 
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
+  InputDecoration _inputDecoration(BuildContext context, String hint) =>
+      InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF3A4540)),
+        hintStyle: TextStyle(color: AppTheme.secondaryOf(context)),
         filled: true,
-        fillColor: const Color(0xFF232B25),
+        fillColor: AppTheme.surfaceOf(context),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF2E3830)),
+          borderSide: BorderSide(color: AppTheme.borderOf(context)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF2E3830)),
+          borderSide: BorderSide(color: AppTheme.borderOf(context)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF5C9E6E)),
+          borderSide: const BorderSide(color: AppTheme.orange, width: 1.5),
         ),
       );
 }

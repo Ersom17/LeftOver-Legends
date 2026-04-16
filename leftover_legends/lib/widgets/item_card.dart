@@ -1,37 +1,49 @@
 // lib/widgets/item_card.dart
-// Reusable card shown in the fridge list. Engineer 1 owns this.
-// Colour-coded left border based on expiry status.
+// Reusable card shown in the fridge list.
+// Colour-coded left border based on expiry status (status colors frozen).
+// Todo #11 — light surface + soft shadow, navy text.
+// Todo #12 — tappable category/location row toggles location.
 
 import 'package:flutter/material.dart';
 import '../models/item.dart';
+import '../theme/app_theme.dart';
 
 class ItemCard extends StatelessWidget {
   final FridgeItem item;
   final VoidCallback? onDelete;
   final VoidCallback? onTap;
+  // TODO #12 – called when user taps the Category · Location row
+  final VoidCallback? onLocationTap;
 
   const ItemCard({
     super.key,
     required this.item,
     this.onDelete,
     this.onTap,
+    this.onLocationTap,
   });
 
   Color get _borderColor {
     switch (item.status) {
-      case ExpiryStatus.danger: return const Color(0xFFC05050);
-      case ExpiryStatus.warn:   return const Color(0xFFE8A838);
-      case ExpiryStatus.good:   return const Color(0xFF6BAF7A);
+      case ExpiryStatus.danger: return AppTheme.danger;
+      case ExpiryStatus.warn:   return AppTheme.warn;
+      case ExpiryStatus.good:   return AppTheme.good;
     }
   }
 
   Color get _badgeBg {
+    // Status color at ~13% opacity for the expiry badge background.
     switch (item.status) {
-      case ExpiryStatus.danger: return const Color(0x22C05050);
-      case ExpiryStatus.warn:   return const Color(0x22E8A838);
-      case ExpiryStatus.good:   return const Color(0x226BAF7A);
+      case ExpiryStatus.danger: return AppTheme.danger.withValues(alpha: 0.13);
+      case ExpiryStatus.warn:   return AppTheme.warn.withValues(alpha: 0.13);
+      case ExpiryStatus.good:   return AppTheme.good.withValues(alpha: 0.13);
     }
   }
+
+  IconData get _locationIcon =>
+      item.location == ItemLocation.fridge
+          ? Icons.kitchen
+          : Icons.inventory_2;
 
   @override
   Widget build(BuildContext context) {
@@ -40,11 +52,18 @@ class ItemCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF232B25),
+          color: AppTheme.surfaceOf(context),
           borderRadius: BorderRadius.circular(14),
           border: Border(
             left: BorderSide(color: _borderColor, width: 3),
           ),
+          boxShadow: const [
+            BoxShadow(
+              color: AppTheme.cardShadow,
+              blurRadius: 12,
+              offset: Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -53,7 +72,7 @@ class ItemCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: _borderColor.withOpacity(0.12),
+                color: _borderColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -63,26 +82,53 @@ class ItemCard extends StatelessWidget {
             ),
             const SizedBox(width: 12),
 
-            // Name + category
+            // Name + category · location row
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     item.name,
-                    style: const TextStyle(
-                      color: Color(0xFFF5EFE0),
+                    style: TextStyle(
+                      color: AppTheme.primaryOf(context),
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    item.categoryLabel,
-                    style: TextStyle(
-                      color: _borderColor.withOpacity(0.8),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+                  // TODO #12 – tap to toggle between Fridge and Pantry
+                  GestureDetector(
+                    onTap: onLocationTap,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      children: [
+                        Text(
+                          item.categoryLabel,
+                          style: TextStyle(
+                            color: _borderColor.withValues(alpha: 0.85),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          ' · ',
+                          style: TextStyle(
+                            color: AppTheme.secondaryOf(context),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Icon(_locationIcon, color: AppTheme.secondaryOf(context), size: 12),
+                        const SizedBox(width: 3),
+                        Text(
+                          item.locationLabel,
+                          style: TextStyle(
+                            color: AppTheme.secondaryOf(context),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -96,7 +142,7 @@ class ItemCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: _badgeBg,
                 border: Border.all(
-                    color: _borderColor.withOpacity(0.5)),
+                    color: _borderColor.withValues(alpha: 0.5)),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -114,8 +160,8 @@ class ItemCard extends StatelessWidget {
             if (onDelete != null)
               GestureDetector(
                 onTap: onDelete,
-                child: const Icon(Icons.chevron_right,
-                    color: Color(0xFF3A4540), size: 20),
+                child: Icon(Icons.chevron_right,
+                    color: AppTheme.secondaryOf(context), size: 20),
               ),
           ],
         ),

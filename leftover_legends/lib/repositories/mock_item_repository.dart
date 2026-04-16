@@ -7,7 +7,9 @@ import '../models/item.dart';
 import 'item_repository.dart';
 
 class MockItemRepository implements ItemRepository {
-  // In-memory list — resets every hot reload, that's fine for dev
+  // In-memory list — resets every hot reload, that's fine for dev.
+  // TODO #12 – mix of fridge/pantry seeds so the location filter is visible.
+  // TODO (BACKEND): real location persistence handled by LocalItemRepository.
   final List<FridgeItem> _items = [
     FridgeItem(
       id:         '1',
@@ -16,6 +18,7 @@ class MockItemRepository implements ItemRepository {
       expiryDate: DateTime.now().add(const Duration(days: 1)),
       category:   ItemCategory.dairy,
       addedAt:    DateTime.now().subtract(const Duration(days: 3)),
+      location:   ItemLocation.fridge,
     ),
     FridgeItem(
       id:         '2',
@@ -24,6 +27,7 @@ class MockItemRepository implements ItemRepository {
       expiryDate: DateTime.now().add(const Duration(days: 3)),
       category:   ItemCategory.veggies,
       addedAt:    DateTime.now().subtract(const Duration(days: 2)),
+      location:   ItemLocation.fridge,
     ),
     FridgeItem(
       id:         '3',
@@ -32,6 +36,7 @@ class MockItemRepository implements ItemRepository {
       expiryDate: DateTime.now().add(const Duration(days: 5)),
       category:   ItemCategory.protein,
       addedAt:    DateTime.now().subtract(const Duration(days: 1)),
+      location:   ItemLocation.fridge,
     ),
     FridgeItem(
       id:         '4',
@@ -40,6 +45,7 @@ class MockItemRepository implements ItemRepository {
       expiryDate: DateTime.now().add(const Duration(days: 7)),
       category:   ItemCategory.dairy,
       addedAt:    DateTime.now(),
+      location:   ItemLocation.pantry,
     ),
     FridgeItem(
       id:         '5',
@@ -48,6 +54,7 @@ class MockItemRepository implements ItemRepository {
       expiryDate: DateTime.now().add(const Duration(days: 10)),
       category:   ItemCategory.fruit,
       addedAt:    DateTime.now(),
+      location:   ItemLocation.pantry,
     ),
   ];
 

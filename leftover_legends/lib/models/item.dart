@@ -6,6 +6,10 @@ enum ItemCategory { dairy, veggies, fruit, protein, grains, other }
 
 enum ExpiryStatus { danger, warn, good }
 
+// TODO #12 – where in the kitchen the item is stored.
+// Defaults to fridge; legacy JSON (no `location` key) also loads as fridge.
+enum ItemLocation { fridge, pantry }
+
 class FridgeItem {
   final String id;
   final String name;
@@ -13,6 +17,8 @@ class FridgeItem {
   final DateTime expiryDate;
   final ItemCategory category;
   final DateTime addedAt;
+  // TODO #12 – storage location (Fridge / Pantry)
+  final ItemLocation location;
 
   const FridgeItem({
     required this.id,
@@ -21,6 +27,7 @@ class FridgeItem {
     required this.expiryDate,
     required this.category,
     required this.addedAt,
+    this.location = ItemLocation.fridge,
   });
 
   // How many days until expiry (can be negative if already expired)
@@ -46,6 +53,10 @@ class FridgeItem {
     }
   }
 
+  // TODO #12 – human-readable storage location
+  String get locationLabel =>
+      location == ItemLocation.fridge ? 'Fridge' : 'Pantry';
+
   // Human-readable expiry label shown in the badge
   String get expiryLabel {
     if (daysLeft < 0)  return 'Expired';
@@ -62,6 +73,8 @@ class FridgeItem {
     'expiryDate': expiryDate.toIso8601String(),
     'category':   category.index,
     'addedAt':    addedAt.toIso8601String(),
+    // TODO #12 – persist location index
+    'location':   location.index,
   };
 
   factory FridgeItem.fromJson(Map<String, dynamic> json) => FridgeItem(
@@ -71,6 +84,8 @@ class FridgeItem {
     expiryDate: DateTime.parse(json['expiryDate'] as String),
     category:   ItemCategory.values[json['category'] as int],
     addedAt:    DateTime.parse(json['addedAt'] as String),
+    // TODO #12 – legacy items without `location` default to fridge
+    location:   ItemLocation.values[json['location'] as int? ?? 0],
   );
 
   // Returns a copy with updated fields (useful for edit screens)
@@ -79,6 +94,7 @@ class FridgeItem {
     String?       emoji,
     DateTime?     expiryDate,
     ItemCategory? category,
+    ItemLocation? location,
   }) =>
       FridgeItem(
         id:         id,
@@ -87,5 +103,6 @@ class FridgeItem {
         expiryDate: expiryDate ?? this.expiryDate,
         category:   category ?? this.category,
         addedAt:    addedAt,
+        location:   location ?? this.location,
       );
 }
