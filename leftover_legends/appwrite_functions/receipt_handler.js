@@ -1,12 +1,10 @@
 export default async ({ req, res, log, error }) => {
   try {
-    const hfToken = process.env.HF_TOKEN;
-
-    if (!hfToken) {
-      return res.json({ ok: false, error: 'Missing HF_TOKEN' }, 500);
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      return res.json({ ok: false, error: 'Missing GROQ_API_KEY' }, 500);
     }
 
-    // Parse body
     let body = {};
     try {
       if (req.bodyJson && typeof req.bodyJson === 'object') {
@@ -15,145 +13,110 @@ export default async ({ req, res, log, error }) => {
         body = JSON.parse(req.body);
       }
     } catch (e) {
-      log(`Body parse error: ${e.message}`);
+      log('Body parse error: ' + e.message);
     }
 
     const base64Image = typeof body.image === 'string' ? body.image.trim() : '';
-
     if (!base64Image) {
       return res.json({ ok: false, error: 'Missing image (base64)' }, 400);
     }
 
-    log(`Image received, length: ${base64Image.length}`);
+    log('Image received, length: ' + base64Image.length);
 
     const today = new Date().toISOString().slice(0, 10);
 
-    const prompt = `You are a grocery receipt parser. Look at this receipt image and extract all grocery items.
+    const prompt = 'You are a grocery receipt parser. Look at this receipt image and extract all grocery items.\n\n'
+      + 'Return ONLY a raw JSON object. No markdown. No explanation. No text before or after.\n\n'
+      + 'Format:\n'
+      + '{"items":[{"name":"string","category":"dairy|veggies|fruit|protein|grains|other","emoji":"string","estimatedExpirationDate":"ISO date","price":0.00,"currency":"CHF","quantity":"string or null","confidence":0.9,"sourceText":"string"}]}\n\n'
+      + 'Rules:\n'
+      + '- Only real grocery items (fridge/pantry). Ignore totals, taxes, store name, timestamps.\n'
+      + '- Estimate expiry from today: ' + today + '\n'
+      + '- Default currency CHF.\n'
+      + '- Return the JSON object only, starting with { and ending with }';
 
-Return ONLY valid JSON with no markdown fences, no explanation, just the JSON:
+    log('Calling Groq vision...');
 
-{
-  "items": [
-    {
-      "name": "string",
-      "category": "dairy|veggies|fruit|protein|grains|other",
-      "emoji": "string",
-      "estimatedExpirationDate": "ISO date string",
-      "price": number or null,
-      "currency": "CHF",
-      "quantity": "string or null",
-      "confidence": number between 0 and 1,
-      "sourceText": "string"
-    }
-  ]
-}
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + groqKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: { url: 'data:image/jpeg;base64,' + base64Image },
+              },
+              {
+                type: 'text',
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 1500,
+      }),
+    });
 
-Rules:
-- Extract only real grocery items a person could store in a fridge or pantry.
-- Ignore store name, address, totals, taxes, discounts, payment lines, timestamps.
-- Use clean English product names.
-- Estimate expiration date based on typical shelf life from today: ${today}.
-- currency defaults to CHF unless clearly something else.
-- Return JSON only, nothing else.`;
+    const rawText = await groqResponse.text();
+    log('Groq status: ' + groqResponse.status);
 
-    log('Sending image to Llama Vision...');
-
-    const hfResponse = await fetch(
-      'https://router.huggingface.co/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${hfToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'Qwen/Qwen2.5-VL-7B-Instruct',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:image/jpeg;base64,${base64Image}`,
-                  },
-                },
-                {
-                  type: 'text',
-                  text: prompt,
-                },
-              ],
-            },
-          ],
-          temperature: 0.1,
-          max_tokens: 1000,
-        }),
-      }
-    );
-
-    const rawApiResponse = await hfResponse.text();
-    log(`HF status: ${hfResponse.status}`);
-
-    if (!hfResponse.ok) {
-      log(`HF error: ${rawApiResponse}`);
-      return res.json(
-        { ok: false, error: 'Hugging Face request failed', details: rawApiResponse },
-        500
-      );
+    if (!groqResponse.ok) {
+      log('Groq error: ' + rawText);
+      return res.json({ ok: false, error: 'Groq request failed', details: rawText }, 500);
     }
 
-    let parsedApiResponse;
+    let apiJson;
     try {
-      parsedApiResponse = JSON.parse(rawApiResponse);
+      apiJson = JSON.parse(rawText);
     } catch (e) {
-      return res.json(
-        { ok: false, error: 'Invalid JSON from HF API', details: rawApiResponse },
-        500
-      );
+      return res.json({ ok: false, error: 'Invalid JSON from Groq API', details: rawText }, 500);
     }
 
-    let generatedText = parsedApiResponse?.choices?.[0]?.message?.content ?? '';
-    log(`Model response length: ${generatedText.length}`);
+    let text = (apiJson.choices && apiJson.choices[0] && apiJson.choices[0].message && apiJson.choices[0].message.content) || '';
+    log('Model response length: ' + text.length);
+    log('Model raw (first 400): ' + text.substring(0, 400));
 
-    if (!generatedText) {
-      return res.json(
-        { ok: false, error: 'Empty response from model', details: parsedApiResponse },
-        500
-      );
+    if (!text) {
+      return res.json({ ok: false, error: 'Empty model response', details: apiJson }, 500);
     }
 
-    // Strip markdown fences if model added them anyway
-    generatedText = generatedText.trim();
-    if (generatedText.startsWith('```json')) {
-      generatedText = generatedText.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
-    } else if (generatedText.startsWith('```')) {
-      generatedText = generatedText.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+    // Strip any markdown fences
+    text = text.trim();
+    text = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+    text = text.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+
+    // Find outermost { ... } — handles any preamble text the model adds
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      text = text.substring(start, end + 1);
     }
 
-    // Extract JSON if model added surrounding text
-    const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      generatedText = jsonMatch[0];
-    }
+    log('Extracted JSON candidate (first 400): ' + text.substring(0, 400));
 
-    let receiptJson;
+    let parsed;
     try {
-      receiptJson = JSON.parse(generatedText);
+      parsed = JSON.parse(text);
     } catch (e) {
-      log(`Could not parse model output: ${generatedText}`);
-      return res.json(
-        { ok: false, error: 'Model did not return valid JSON', raw: generatedText },
-        500
-      );
+      log('JSON.parse failed: ' + e.message);
+      return res.json({ ok: false, error: 'Model did not return valid JSON', raw: text }, 500);
     }
 
-    const items = Array.isArray(receiptJson.items) ? receiptJson.items : [];
-    log(`Parsed ${items.length} item(s)`);
+    const items = Array.isArray(parsed.items) ? parsed.items : [];
+    log('Parsed ' + items.length + ' items');
 
     return res.json({ ok: true, items }, 200);
 
   } catch (err) {
-    error(err?.stack || err?.message || String(err));
-    return res.json({ ok: false, error: err?.message || 'Unknown server error' }, 500);
+    error(err.stack || err.message || String(err));
+    return res.json({ ok: false, error: err.message || 'Unknown error' }, 500);
   }
 };
