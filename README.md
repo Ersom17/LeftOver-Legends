@@ -1,2 +1,3 @@
-# LeftOver-Legends
-Cross cultural project in between SUPSI and PSU 
+# IngredientConservo
+
+Your pantry, your legacy. A Flutter app to track groceries, reduce food waste, and generate recipes from what you already have.
