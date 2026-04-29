@@ -21,11 +21,15 @@ class InsightsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final events = ref.watch(pantryEventsProvider);
-    final recipes = ref.watch(recipeHistoryProvider);
+    final eventsAsync = ref.watch(pantryEventsProvider);
+    final recipesAsync = ref.watch(recipeHistoryProvider);
     final lang = ref.watch(localeProvider);
     final isIt = lang == AppLanguage.it;
 
+    final events = eventsAsync.value ?? const <PantryEvent>[];
+    final recipes = recipesAsync.value ?? const [];
+
+    final isLoading = eventsAsync.isLoading && events.isEmpty;
     final stats = _InsightsStats.from(events);
 
     return Scaffold(
@@ -37,9 +41,11 @@ class InsightsScreen extends ConsumerWidget {
         ),
         title: Text(isIt ? 'Le tue abitudini' : 'Your habits'),
       ),
-      body: events.isEmpty
-          ? _EmptyState(isIt: isIt)
-          : ListView(
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : (events.isEmpty
+              ? _EmptyState(isIt: isIt)
+              : ListView(
               padding: const EdgeInsets.all(20),
               children: [
                 // Hero — save rate is the headline metric.
@@ -134,7 +140,7 @@ class InsightsScreen extends ConsumerWidget {
                 ...events.take(5).map((e) => _EventTile(event: e, isIt: isIt)),
                 const SizedBox(height: 24),
               ],
-            ),
+            )),
     );
   }
 }

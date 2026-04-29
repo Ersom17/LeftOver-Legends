@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/region_provider.dart';
+import '../models/coupon_spec.dart';
+import '../providers/coupon_catalog_provider.dart';
 import '../providers/user_profile_provider.dart';
 import '../providers/rewards_provider.dart';
 import '../theme/app_theme.dart';
@@ -168,33 +169,11 @@ class _BetaBadge extends StatelessWidget {
 }
 
 // ─── Shop Tab ────────────────────────────────────────────────────────────────
-
-/// Catalog entry for a coupon. Region-specific catalogs live below.
-class _CouponSpec {
-  final String store;
-  final String emoji;
-  final Color color;
-  final String discount;
-  final String description;
-  final int pointsCost;
-  final int expiryDays;
-
-  const _CouponSpec({
-    required this.store,
-    required this.emoji,
-    required this.color,
-    required this.discount,
-    required this.description,
-    required this.pointsCost,
-    required this.expiryDays,
-  });
-}
-
-class _CouponSection {
-  final String title;
-  final List<_CouponSpec> items;
-  const _CouponSection(this.title, this.items);
-}
+//
+// Catalog entries come from the [couponCatalogProvider] which reads them
+// from Appwrite (filtered by region) and falls back to a local seed if
+// the network is unavailable. Section grouping happens in this widget so
+// the server schema stays flat.
 
 class _ShopTab extends ConsumerWidget {
   final int points;
@@ -202,31 +181,70 @@ class _ShopTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final region = ref.watch(regionProvider);
-    final sections = region == AppRegion.us ? _usCatalog : _euCatalog;
+    final catalogAsync = ref.watch(couponCatalogProvider);
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        for (final section in sections) ...[
-          _sectionLabel(section.title),
-          const SizedBox(height: 10),
-          ...section.items.map(
-            (s) => _CouponCard(
-              store: s.store,
-              emoji: s.emoji,
-              color: s.color,
-              discount: s.discount,
-              description: s.description,
-              pointsCost: s.pointsCost,
-              userPoints: points,
-              expiryDays: s.expiryDays,
-            ),
+    return catalogAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Couldn\'t load coupons: $e',
+            style: const TextStyle(color: AppColors.darkGreen),
           ),
-          const SizedBox(height: 20),
-        ],
-      ],
+        ),
+      ),
+      data: (specs) {
+        // Group by section, keep section order stable.
+        final sections = <CouponSection, List<CouponSpec>>{};
+        for (final spec in specs) {
+          sections.putIfAbsent(spec.section, () => []).add(spec);
+        }
+        // Sort within section by sortOrder.
+        for (final list in sections.values) {
+          list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+        }
+
+        return RefreshIndicator(
+          onRefresh: () =>
+              ref.read(couponCatalogProvider.notifier).refresh(),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              for (final section in CouponSection.values)
+                if (sections[section]?.isNotEmpty ?? false) ...[
+                  _sectionLabel(_sectionTitle(section)),
+                  const SizedBox(height: 10),
+                  ...sections[section]!.map(
+                    (s) => _CouponCard(
+                      store: s.store,
+                      emoji: s.emoji,
+                      color: s.color,
+                      discount: s.discount,
+                      description: s.description,
+                      pointsCost: s.pointsCost,
+                      userPoints: points,
+                      expiryDays: s.expiryDays,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  String _sectionTitle(CouponSection section) {
+    switch (section) {
+      case CouponSection.supermarkets:
+        return '🛒 Supermarkets';
+      case CouponSection.restaurants:
+        return '🍽️ Restaurants';
+      case CouponSection.eco:
+        return '🌱 Eco & Organic';
+    }
   }
 
   Widget _sectionLabel(String text) => Text(
@@ -237,215 +255,6 @@ class _ShopTab extends ConsumerWidget {
           fontWeight: FontWeight.w900,
         ),
       );
-
-  // ─── Switzerland / Europe catalog ───────────────────────────────────────
-  static const List<_CouponSection> _euCatalog = [
-    _CouponSection('🛒 Supermarkets', [
-      _CouponSpec(
-        store: 'Migros',
-        emoji: '🛍️',
-        color: AppColors.warn,
-        discount: '5% off your next shop',
-        description: 'Valid on any purchase over CHF 30',
-        pointsCost: 20,
-        expiryDays: 30,
-      ),
-      _CouponSpec(
-        store: 'Coop',
-        emoji: '🏪',
-        color: AppColors.danger,
-        discount: '10% off fresh produce',
-        description: 'Valid on fruits, vegetables & dairy',
-        pointsCost: 35,
-        expiryDays: 21,
-      ),
-      _CouponSpec(
-        store: 'Denner',
-        emoji: '🍷',
-        color: AppColors.warmGold,
-        discount: 'CHF 5 off wines',
-        description: 'Valid on any bottle over CHF 12',
-        pointsCost: 25,
-        expiryDays: 14,
-      ),
-      _CouponSpec(
-        store: 'Aldi Suisse',
-        emoji: '🛒',
-        color: AppColors.mutedOlive,
-        discount: '10% off entire basket',
-        description: 'Min CHF 25, in-store only',
-        pointsCost: 30,
-        expiryDays: 21,
-      ),
-      _CouponSpec(
-        store: 'Lidl',
-        emoji: '🥬',
-        color: AppColors.good,
-        discount: 'CHF 3 off CHF 20',
-        description: 'Valid on weekday shops',
-        pointsCost: 18,
-        expiryDays: 14,
-      ),
-    ]),
-    _CouponSection('🍽️ Restaurants', [
-      _CouponSpec(
-        store: 'Nordsee',
-        emoji: '🐟',
-        color: AppColors.mutedOlive,
-        discount: '15% off any meal',
-        description: 'Valid Mon–Thu, dine-in only',
-        pointsCost: 50,
-        expiryDays: 60,
-      ),
-      _CouponSpec(
-        store: 'Pizza Hut',
-        emoji: '🍕',
-        color: AppColors.danger,
-        discount: 'Buy 1 get 1 free pizza',
-        description: 'Valid on medium or large pizzas',
-        pointsCost: 80,
-        expiryDays: 30,
-      ),
-      _CouponSpec(
-        store: 'Starbucks',
-        emoji: '☕',
-        color: AppColors.good,
-        discount: 'Free size upgrade',
-        description: 'Upgrade any drink to the next size',
-        pointsCost: 15,
-        expiryDays: 14,
-      ),
-    ]),
-    _CouponSection('🌱 Eco & Organic', [
-      _CouponSpec(
-        store: 'Alnatura',
-        emoji: '🌿',
-        color: AppColors.darkGreen,
-        discount: '10% off entire basket',
-        description: 'Organic products only, min CHF 20',
-        pointsCost: 40,
-        expiryDays: 30,
-      ),
-      _CouponSpec(
-        store: 'Too Good To Go',
-        emoji: '♻️',
-        color: AppColors.good,
-        discount: 'CHF 3 off a magic bag',
-        description: 'Rescue food, save money',
-        pointsCost: 10,
-        expiryDays: 7,
-      ),
-    ]),
-  ];
-
-  // ─── United States catalog ──────────────────────────────────────────────
-  static const List<_CouponSection> _usCatalog = [
-    _CouponSection('🛒 Supermarkets', [
-      _CouponSpec(
-        store: 'Walmart',
-        emoji: '🛒',
-        color: AppColors.warn,
-        discount: '\$5 off \$40 grocery order',
-        description: 'In-store or pickup, exclusions apply',
-        pointsCost: 25,
-        expiryDays: 30,
-      ),
-      _CouponSpec(
-        store: 'Wegmans',
-        emoji: '🥗',
-        color: AppColors.darkGreen,
-        discount: '10% off fresh produce',
-        description: 'Valid on fruits, vegetables & deli',
-        pointsCost: 35,
-        expiryDays: 21,
-      ),
-      _CouponSpec(
-        store: 'Trader Joe\'s',
-        emoji: '🥑',
-        color: AppColors.danger,
-        discount: '\$5 off \$30',
-        description: 'In-store, one per customer',
-        pointsCost: 30,
-        expiryDays: 21,
-      ),
-      _CouponSpec(
-        store: 'Whole Foods',
-        emoji: '🥦',
-        color: AppColors.good,
-        discount: '15% off organic produce',
-        description: 'Prime members only, weekly limit',
-        pointsCost: 45,
-        expiryDays: 14,
-      ),
-      _CouponSpec(
-        store: 'Kroger',
-        emoji: '🏪',
-        color: AppColors.mutedOlive,
-        discount: '\$3 off \$25',
-        description: 'In-store, exclusions apply',
-        pointsCost: 18,
-        expiryDays: 21,
-      ),
-    ]),
-    _CouponSection('🍽️ Restaurants', [
-      _CouponSpec(
-        store: 'Chipotle',
-        emoji: '🌯',
-        color: AppColors.warmGold,
-        discount: 'Free guacamole add-on',
-        description: 'On any entrée, in-app or in-store',
-        pointsCost: 20,
-        expiryDays: 30,
-      ),
-      _CouponSpec(
-        store: 'Starbucks',
-        emoji: '☕',
-        color: AppColors.good,
-        discount: 'Free size upgrade',
-        description: 'Upgrade any drink to the next size',
-        pointsCost: 15,
-        expiryDays: 14,
-      ),
-      _CouponSpec(
-        store: 'Panera',
-        emoji: '🥖',
-        color: AppColors.mutedOlive,
-        discount: '\$3 off any soup & sandwich',
-        description: 'Valid Mon–Fri, in-app order',
-        pointsCost: 25,
-        expiryDays: 30,
-      ),
-    ]),
-    _CouponSection('🌱 Eco & Organic', [
-      _CouponSpec(
-        store: 'Imperfect Foods',
-        emoji: '🥕',
-        color: AppColors.darkGreen,
-        discount: '\$10 off first box',
-        description: 'Rescued produce delivered to your door',
-        pointsCost: 30,
-        expiryDays: 30,
-      ),
-      _CouponSpec(
-        store: 'Too Good To Go',
-        emoji: '♻️',
-        color: AppColors.good,
-        discount: '\$3 off a Surprise Bag',
-        description: 'Rescue food, save money',
-        pointsCost: 10,
-        expiryDays: 7,
-      ),
-      _CouponSpec(
-        store: 'Misfits Market',
-        emoji: '🥦',
-        color: AppColors.warn,
-        discount: '20% off your first order',
-        description: 'Organic groceries shipped nationwide',
-        pointsCost: 35,
-        expiryDays: 21,
-      ),
-    ]),
-  ];
 }
 
 class _CouponCard extends ConsumerStatefulWidget {

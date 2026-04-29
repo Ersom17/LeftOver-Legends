@@ -9,12 +9,17 @@
 //   - action-gated: user must perform a real in-app action (tap FAB,
 //     tap Save, etc.). The UI calls [notifyAction] and the tour advances
 //     only if the incoming action matches the current step.
+//
+// Persistence is dual: a SharedPreferences flag for instant boot, plus
+// the user_profile.mascotTourCompleted column so the "seen" state follows
+// the user across devices.
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/mascot_tour/mascot_tour_anchors.dart';
+import 'user_profile_provider.dart';
 
 enum MascotPose { left, right, up, end }
 
@@ -191,11 +196,33 @@ class MascotTourNotifier extends Notifier<MascotTourState> {
   static const _prefKey = 'mascot_tour_complete';
 
   @override
-  MascotTourState build() => const MascotTourState(
-        active: false,
-        stepIndex: 0,
-        firstVisitChecked: false,
-      );
+  MascotTourState build() {
+    _listenToProfile();
+    return const MascotTourState(
+      active: false,
+      stepIndex: 0,
+      firstVisitChecked: false,
+    );
+  }
+
+  /// Adopt the server-side completion flag the first time the profile
+  /// lands. We never *demote* completed → not-completed from here — that
+  /// path goes through [restart] which owns the round-trip writeback.
+  void _listenToProfile() {
+    ref.listen(userProfileProvider, (_, next) {
+      final profile = next.value;
+      if (profile == null) return;
+      if (!profile.mascotTourCompleted) return;
+      // Persist the local flag so the next cold launch doesn't auto-start.
+      SharedPreferences.getInstance().then((p) => p.setBool(_prefKey, true));
+      if (state.active) {
+        // The tour was running locally but the server says it's done —
+        // probably another device finished it. Stop without re-firing the
+        // server write.
+        state = state.copyWith(active: false, firstVisitChecked: true);
+      }
+    });
+  }
 
   /// Called once by the pantry screen. If the user has never seen the tour,
   /// it starts automatically; otherwise it stays dormant until restart().
@@ -203,7 +230,12 @@ class MascotTourNotifier extends Notifier<MascotTourState> {
     if (state.firstVisitChecked) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final done = prefs.getBool(_prefKey) ?? false;
+      final localDone = prefs.getBool(_prefKey) ?? false;
+      // Cross-device hint: if any synced profile has marked this complete,
+      // honor that even if the local cache hasn't caught up.
+      final serverDone =
+          ref.read(userProfileProvider).value?.mascotTourCompleted ?? false;
+      final done = localDone || serverDone;
       state = state.copyWith(
         firstVisitChecked: true,
         active: !done,
@@ -259,6 +291,12 @@ class MascotTourNotifier extends Notifier<MascotTourState> {
     } catch (e) {
       debugPrint('Mascot tour flag reset failed: $e');
     }
+    // Mirror to the profile so other devices know the user wants the
+    // tour again.
+    await ref.read(userProfileProvider.notifier).updateTourState(
+          completed: false,
+          stepIndex: 0,
+        );
     state = state.copyWith(active: true, stepIndex: 0);
   }
 
@@ -269,6 +307,11 @@ class MascotTourNotifier extends Notifier<MascotTourState> {
     } catch (e) {
       debugPrint('Mascot tour flag write failed: $e');
     }
+    final lastIndex = state.stepIndex;
+    await ref.read(userProfileProvider.notifier).updateTourState(
+          completed: true,
+          stepIndex: lastIndex,
+        );
     state = state.copyWith(active: false, stepIndex: 0);
   }
 }

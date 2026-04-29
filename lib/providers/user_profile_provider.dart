@@ -13,12 +13,25 @@ class UserProfile {
   final double totalSpent;
   final double totalWasted;
 
+  /// `'en'` / `'it'` / `''`. Empty string means "no preference set yet —
+  /// fall back to the region default".
+  final String appLanguage;
+
+  /// True once the user has dismissed or finished the mascot tour.
+  final bool mascotTourCompleted;
+
+  /// Last step index reached, useful if we ever resume the tour.
+  final int mascotTourStepIndex;
+
   const UserProfile({
     required this.ownerId,
     required this.country,
     required this.points,
     required this.totalSpent,
     required this.totalWasted,
+    required this.appLanguage,
+    required this.mascotTourCompleted,
+    required this.mascotTourStepIndex,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -28,6 +41,10 @@ class UserProfile {
       points: json['points'] as int? ?? 0,
       totalSpent: (json['totalSpent'] as num?)?.toDouble() ?? 0.0,
       totalWasted: (json['totalWasted'] as num?)?.toDouble() ?? 0.0,
+      appLanguage: (json['appLanguage'] as String? ?? '').trim(),
+      mascotTourCompleted: json['mascotTourCompleted'] as bool? ?? false,
+      mascotTourStepIndex:
+          (json['mascotTourStepIndex'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -85,6 +102,50 @@ class UserProfileNotifier extends AsyncNotifier<UserProfile?> {
     } catch (e) {
       print('Error updating country: $e');
       rethrow;
+    }
+  }
+
+  /// Persist the user's language preference on the profile document so it
+  /// follows them across devices. The local [localeProvider] still owns
+  /// the live state — this is just the durable mirror.
+  Future<void> updateAppLanguage(String langCode) async {
+    final authState = ref.read(authProvider);
+    if (!authState.hasValue || authState.value == null) return;
+    final userId = authState.value!.$id;
+    try {
+      await databases.updateDocument(
+        databaseId: AppwriteConstants.databaseId,
+        collectionId: AppwriteConstants.userProfileTableId,
+        documentId: userId,
+        data: {'appLanguage': langCode},
+      );
+    } catch (e) {
+      // Non-fatal — the local cache still carries the preference.
+      print('Error updating appLanguage: $e');
+    }
+  }
+
+  /// Persist mascot tour progress / completion. Debounced at the call
+  /// site (only invoked on completion, restart, dismiss).
+  Future<void> updateTourState({
+    required bool completed,
+    required int stepIndex,
+  }) async {
+    final authState = ref.read(authProvider);
+    if (!authState.hasValue || authState.value == null) return;
+    final userId = authState.value!.$id;
+    try {
+      await databases.updateDocument(
+        databaseId: AppwriteConstants.databaseId,
+        collectionId: AppwriteConstants.userProfileTableId,
+        documentId: userId,
+        data: {
+          'mascotTourCompleted': completed,
+          'mascotTourStepIndex': stepIndex,
+        },
+      );
+    } catch (e) {
+      print('Error updating mascot tour state: $e');
     }
   }
 }

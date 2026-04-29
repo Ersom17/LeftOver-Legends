@@ -68,7 +68,9 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final favorites = ref.watch(recipeFavoritesProvider);
+    // Favorites are server-backed; default to "not a favorite" until the
+    // first fetch resolves so the bookmark icon doesn't flicker.
+    final favorites = ref.watch(recipeFavoritesProvider).value ?? const [];
     final isFavorite = favorites
         .any((r) => r.title == recipe.title && r.culture == recipe.culture);
     final itemsAsync = ref.watch(itemsProvider);

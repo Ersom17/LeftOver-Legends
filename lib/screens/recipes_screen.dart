@@ -41,7 +41,9 @@ class RecipesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final favorites = ref.watch(recipeFavoritesProvider);
+    // Server-backed favorites — fall through to an empty list while the
+    // first fetch is in flight so the badge isn't stuck on a spinner.
+    final favorites = ref.watch(recipeFavoritesProvider).value ?? const [];
     final favoritesNotifier = ref.read(recipeFavoritesProvider.notifier);
     final strings = ref.watch(appStringsProvider);
 

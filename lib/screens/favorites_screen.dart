@@ -36,8 +36,13 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen>
 
   @override
   Widget build(BuildContext context) {
-    final favorites = ref.watch(recipeFavoritesProvider);
-    final history = ref.watch(recipeHistoryProvider);
+    final favoritesAsync = ref.watch(recipeFavoritesProvider);
+    final historyAsync = ref.watch(recipeHistoryProvider);
+
+    final favorites = favoritesAsync.value ?? const <Recipe>[];
+    final history = historyAsync.value ?? const <Recipe>[];
+
+    final isLoading = favoritesAsync.isLoading || historyAsync.isLoading;
 
     return Scaffold(
       backgroundColor: AppColors.lightBeige,
@@ -56,22 +61,24 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _RecipeList(
-            recipes: favorites,
-            emptyTitle: 'No favorites yet',
-            emptyBody:
-                'Tap the bookmark icon on a recipe to save it here for later.',
-          ),
-          _RecipeList(
-            recipes: history,
-            emptyTitle: 'No recipes yet',
-            emptyBody: 'Recipes you generate will appear here.',
-          ),
-        ],
-      ),
+      body: isLoading && favorites.isEmpty && history.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _RecipeList(
+                  recipes: favorites,
+                  emptyTitle: 'No favorites yet',
+                  emptyBody:
+                      'Tap the bookmark icon on a recipe to save it here for later.',
+                ),
+                _RecipeList(
+                  recipes: history,
+                  emptyTitle: 'No recipes yet',
+                  emptyBody: 'Recipes you generate will appear here.',
+                ),
+              ],
+            ),
     );
   }
 }
